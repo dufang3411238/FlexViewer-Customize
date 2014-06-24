@@ -1,0 +1,240 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+///////////////////////////////////////////////////////////////////////////
+// Copyright (c) 2010-2011 Esri. All Rights Reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+///////////////////////////////////////////////////////////////////////////
+-->
+<viewer:BaseWidget xmlns:fx="http://ns.adobe.com/mxml/2009"
+				   xmlns:s="library://ns.adobe.com/flex/spark"
+				   xmlns:mx="library://ns.adobe.com/flex/mx"
+				   xmlns:viewer="com.esri.viewer.*"
+				   width="297" height="75" horizontalGap="38" layout="horizontal" widgetConfigLoaded="init()">
+    <fx:Script>
+        <![CDATA[
+			import com.esri.ags.layers.ArcGISDynamicMapServiceLayer;
+			import com.esri.ags.layers.ArcIMSMapServiceLayer;
+			import com.esri.ags.layers.FeatureLayer;
+			import com.esri.ags.layers.Layer;
+			import com.esri.ags.layers.supportClasses.LayerInfo;
+			
+			import flash.utils.setInterval;
+			
+			import mx.collections.ArrayCollection;
+			import mx.controls.Alert;
+			import mx.utils.ObjectUtil;
+			
+			private var isIndustryVisible:Boolean = true;
+			private var isEnterpriseVisible:Boolean = true;
+			private var isSmallShopVisible:Boolean = true;
+			private var industryName:String;
+			private var enterpriseName:String;
+			private var smallShopName:String;
+            private function init():void
+            {
+                if (configXML) // checking for valid content in the configuration file
+                {
+					industryName = configXML.industry;
+					enterpriseName=configXML.enterprise;
+					smallShopName=configXML.smallshop;
+                }
+				
+            }
+			
+			
+			private function buildVisibleLayers(value:Array):ArrayCollection
+			{
+				var ac:ArrayCollection = new ArrayCollection();
+				var li:LayerInfo
+				for each( li in value){
+					if(li.defaultVisibility)
+						ac.addItem(li.layerId);
+				}
+				return ac;
+			}
+			
+			protected  function showLayer(layer:Layer):void
+			{
+				layer.visible = true;
+				var visibleLayers:ArrayCollection;
+				if(layer is ArcGISDynamicMapServiceLayer)
+				{
+					//获取当前可见图层列表
+					if(!ArcGISDynamicMapServiceLayer(layer).visibleLayers){
+						visibleLayers = buildVisibleLayers(ArcGISDynamicMapServiceLayer(layer).layerInfos);
+					}else{
+						visibleLayers = ArcGISDynamicMapServiceLayer(layer).visibleLayers as ArrayCollection;
+					}
+					
+					//在当前可见图层列表中加入要显示的图层
+					visibleLayers.addItem(11);
+				}
+				else if(layer is ArcIMSMapServiceLayer)
+				{
+					//获取当前可见图层列表
+					if(!ArcGISDynamicMapServiceLayer(layer).visibleLayers){
+						visibleLayers = buildVisibleLayers(ArcIMSMapServiceLayer(layer).layerInfos);
+					}else{
+						visibleLayers = ArcIMSMapServiceLayer(layer).visibleLayers as ArrayCollection;
+					}
+					
+					//在当前可见图层列表中加入要显示的图层
+					visibleLayers.addItem(11);
+				}
+				//设置鼠标显示状态
+				if (visibleLayers)
+				{
+					cursorManager.setBusyCursor();
+				}
+			}
+			
+			protected function hideLayer(layer:Layer):void
+			{
+				layer.visible = false;
+				var visibleLayers:ArrayCollection;
+				if(layer is ArcGISDynamicMapServiceLayer)
+				{
+					//获取当前可见图层列表
+					if(!ArcGISDynamicMapServiceLayer(layer).visibleLayers){
+						visibleLayers = buildVisibleLayers(ArcGISDynamicMapServiceLayer(layer).layerInfos);
+					}else{
+						visibleLayers = ArcGISDynamicMapServiceLayer(layer).visibleLayers as ArrayCollection;
+					}
+					//查找要隐藏的图层的index
+					var index:int=visibleLayers.getItemIndex(11);
+					//在当前可见图层列表中去除要隐藏的图层
+					if (index != -1)
+					{
+						visibleLayers.removeItemAt(index);
+					}
+				}
+				else if(layer is ArcIMSMapServiceLayer)
+				{
+					//获取当前可见图层列表
+					if(!ArcIMSMapServiceLayer(layer).visibleLayers){
+						visibleLayers = buildVisibleLayers(ArcIMSMapServiceLayer(layer).layerInfos);
+					}else{
+						visibleLayers = ArcIMSMapServiceLayer(layer).visibleLayers as ArrayCollection;
+					}
+					
+					//查找要隐藏的图层的index
+					var index2:int=visibleLayers.getItemIndex(11);
+					//在当前可见图层列表中去除要隐藏的图层
+					if (index2 != -1)
+					{
+						visibleLayers.removeItemAt(index2);
+					}
+				}
+				//设置鼠标显示状态
+				if (visibleLayers)
+				{
+					cursorManager.setBusyCursor();
+				}
+			}
+			
+			protected function IndustryDistrict_clickHandler(/* event:MouseEvent */):void
+			{
+				var dyn:FeatureLayer = map.getLayer(industryName) as FeatureLayer;
+				if(isIndustryVisible){
+					hideLayer(dyn);	
+					isIndustryVisible =false;
+				}else{
+					showLayer(dyn);
+					isIndustryVisible = true;
+				}
+				//flash();
+				
+			}
+			
+			protected function Enterprise_clickHandler(/* event:MouseEvent */):void
+			{
+				
+				var dyn:FeatureLayer = map.getLayer(enterpriseName) as FeatureLayer;
+				if(isEnterpriseVisible){
+					hideLayer(dyn);	
+					isEnterpriseVisible = false;
+				}else{
+					showLayer(dyn);
+					isEnterpriseVisible = true;
+				}
+				
+				//flash();
+				//if(layersA.length
+				//intervalID = setInterval(IndustryDistrict_clickHandler,300);
+				
+			}
+			
+			protected function SmallShop_clickHandler(/* event:MouseEvent */):void
+			{
+				var dyn:FeatureLayer = map.getLayer(smallShopName) as FeatureLayer;
+				if(isSmallShopVisible){
+					hideLayer(dyn);	
+					isSmallShopVisible = false;
+				}else{
+					showLayer(dyn);
+					isSmallShopVisible = true;
+				}
+				//flash();
+			}
+			
+			private var intervalID:uint;
+			private function flash():void
+			{
+				var layersA:ArrayCollection = map.layers as ArrayCollection;
+				
+				var visibleCount:int = 0;
+				var visibleLayerID:String = "";
+				for each(var l:Layer in layersA)
+				{
+					if(l is FeatureLayer)
+					{
+						if(l.visible)
+						{
+							++visibleCount;
+							if(visibleCount>1)
+								break;
+							visibleLayerID = l.id;
+						}
+					}
+				}
+				
+				if(visibleCount==1)
+				{
+					if(visibleLayerID=="工矿商贸企业")
+						intervalID = setInterval(IndustryDistrict_clickHandler,300);
+					else if(visibleLayerID=="公众聚集场所")
+						intervalID = setInterval(Enterprise_clickHandler,300);
+					else if(visibleLayerID=="三小场所")
+						intervalID = setInterval(SmallShop_clickHandler,300);
+					
+				}
+				else
+				{
+					//clearInterval(intervalID);
+				}
+			}
+			
+			
+			
+		]]>
+    </fx:Script>
+	
+	<s:Image id="IndustryDistrict"  buttonMode="true" click="IndustryDistrict_clickHandler()"
+			 source="@Embed('assets/images/qiye.png')" toolTip="工矿商贸企业"/>
+	<s:Image id="Enterprise" buttonMode="true" click="Enterprise_clickHandler()"
+			 source="@Embed('assets/images/miji.png')" toolTip="公众聚集场所"/>
+	<s:Image id="SmallShop" buttonMode="true" click="SmallShop_clickHandler()"
+			 source="@Embed('assets/images/sanxiao.png')" toolTip="三小场所"/>
+	
+</viewer:BaseWidget>

@@ -1,0 +1,659 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+///////////////////////////////////////////////////////////////////////////
+// Copyright (c) 2010-2011 Esri. All Rights Reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+///////////////////////////////////////////////////////////////////////////
+-->
+<viewer:BaseWidget xmlns:fx="http://ns.adobe.com/mxml/2009"
+                   xmlns:s="library://ns.adobe.com/flex/spark"
+                   xmlns:viewer="com.esri.viewer.*"
+                   xmlns:components="com.esri.viewer.components.*"
+                   xmlns:HeaderController="widgets.HeaderController.*"
+                   width="100%"
+                   borderSkin="{null}"
+                   creationComplete="creationCompleteHandler(event)">
+	
+	<viewer:states>
+		<s:State name="Allnormal"/>
+		<s:State name="Allover"/>
+		
+		<s:State name="Industrynormal"/>
+		<s:State name="Industryover"/>
+		
+		<s:State name="Publicnormal"/>
+		<s:State name="Publicover"/>
+		
+		<s:State name="Smallnormal"/>
+		<s:State name="Smallover"/>
+	</viewer:states>
+
+    <fx:Script>
+        <![CDATA[
+			import com.esri.ags.FeatureSet;
+			import com.esri.ags.Graphic;
+			import com.esri.ags.Map;
+			import com.esri.ags.events.LayerEvent;
+			import com.esri.ags.geometry.Geometry;
+			import com.esri.ags.geometry.MapPoint;
+			import com.esri.ags.layers.ArcGISDynamicMapServiceLayer;
+			import com.esri.ags.layers.ArcIMSMapServiceLayer;
+			import com.esri.ags.layers.FeatureLayer;
+			import com.esri.ags.layers.Layer;
+			import com.esri.ags.layers.supportClasses.FeatureCollection;
+			import com.esri.ags.layers.supportClasses.LayerDetails;
+			import com.esri.ags.layers.supportClasses.LayerInfo;
+			import com.esri.ags.portal.PopUpRenderer;
+			import com.esri.ags.portal.supportClasses.PopUpInfo;
+			import com.esri.ags.portal.supportClasses.PopUpMediaInfo;
+			import com.esri.ags.renderers.SimpleRenderer;
+			import com.esri.ags.symbols.PictureMarkerSymbol;
+			import com.esri.ags.symbols.SimpleFillSymbol;
+			import com.esri.ags.symbols.SimpleLineSymbol;
+			import com.esri.ags.symbols.SimpleMarkerSymbol;
+			import com.esri.ags.symbols.Symbol;
+			import com.esri.ags.tasks.supportClasses.Query;
+			import com.esri.viewer.AppEvent;
+			import com.esri.viewer.WidgetStates;
+			import com.esri.viewer.components.SearchEditorPopUpRenderer;
+			import com.esri.viewer.components.SearchPopUpRenderer;
+			import com.esri.viewer.utils.ErrorMessageUtil;
+			import com.esri.viewer.utils.LabelUtil;
+			import com.esri.viewer.utils.SymbolParser;
+			
+			import mx.collections.ArrayCollection;
+			import mx.collections.ArrayList;
+			import mx.containers.TitleWindow;
+			import mx.controls.Alert;
+			import mx.events.FlexEvent;
+			import mx.managers.PopUpManager;
+			import mx.rpc.AsyncResponder;
+			import mx.utils.StringUtil;
+			
+			import spark.components.Scroller;
+			import spark.components.supportClasses.ItemRenderer;
+			import spark.formatters.DateTimeFormatter;
+			import spark.layouts.HorizontalAlign;
+			import spark.layouts.TileLayout;
+			import spark.layouts.TileOrientation;
+			import spark.layouts.VerticalAlign;
+			
+			import widgets.Custom.LeftPanelWidget;
+			import widgets.Search.SearchResultDataGroup;
+			import widgets.supportClasses.FeatureSetUtil;
+			import widgets.supportClasses.ResultAttributes;
+			import widgets.supportClasses.ResultItem;
+			
+            private const NONSTOP_RESIZE_GAP:Number = 25;
+
+            private const MIN_HEADING_WIDTH:Number = 100;
+
+            private var minHeadingGroupWidth:Number;
+
+            [Bindable]
+            private var linkList:ArrayList;
+
+            [Bindable]
+            private var headingWidth:Number = MIN_HEADING_WIDTH;
+
+            [Bindable]
+            private var widgetItemArrCol:ArrayCollection;
+
+            [Bindable]
+            private var groupWidgetArrCol:ArrayCollection;
+
+            [Bindable]
+            private var title:String;
+
+			[Bindable]
+			private var dateTiemFormatter:DateTimeFormatter;
+			[Bindable]
+			private var dateStr:String;
+			
+			private var _time:Date;     //日期
+			private var timer:Timer;    //计数器
+			
+			public static var urlConfigParams:Object = {};
+			[Bindable]
+			private var username:String;
+			
+			[Bindable]
+			private var userType:String;
+			
+			//搜索变量
+			private var resultFeatureLayer:FeatureLayer;
+			private var popUpRenderer:SearchPopUpRenderer = new SearchPopUpRenderer();
+			private var editorPopUpRenderer:SearchEditorPopUpRenderer = new SearchEditorPopUpRenderer();
+			
+			[Bindable]
+			private var searchResultAC:ArrayCollection;
+			
+			private var resultMarkerSymbol:Symbol;
+			private var resultLineSymbol:Symbol;
+			private var resultFillSymbol:Symbol;
+			private var shareResults:Boolean;
+			
+			private var searchRes:SearchResultDataGroup;
+			private var scallbar:Scroller;
+			
+			private var searchCount:uint = 0;
+			private var configSearchText:Array;
+			private var loadingLabel:String;
+			private var nolayerLabel:String;
+			private var queryLayer:FeatureLayer;
+			private var queryGeom:Geometry;
+			private var queryExpr:String;
+			private var queryFields:XMLList;
+			private var queryTitleField:String;
+			private var queryLinkField:String;
+			private var queryLinkAlias:String;
+			private var querySymbol:Symbol;
+			private var resultsLabel:String;
+			private var selectionLabel:String;
+			private var gFeatureSet:FeatureSet;
+			private var zoomScale:Number = 50000;
+			private var pointSearchTolerance:Number = 6;
+			
+			[Bindable]
+			private var featureLayers:Array;
+			
+			public var twTab:TitleWindow;
+			
+			private var isBackPortal:Boolean = false;
+			public function init():void
+			{
+				//显示Hearder日期
+				this.showCurDate();
+				
+				timer.addEventListener(TimerEvent.TIMER,timeHandler);
+				timer.start();   
+				
+				twTab = new TitleWindow();
+				searchRes = new SearchResultDataGroup();
+				scallbar = new Scroller();	
+				
+			}
+			
+			public function showCurDate():void
+			{
+				_time = new Date();
+				var monStr:String;
+				var dateStr:String;
+				var hoursStr:String;
+				var minutesStr:String;
+				var secondsStr:String;
+				var week:String;
+				
+				var w:Number=_time.day;
+				var seconds:Number = _time.getSeconds();  //秒
+				var minutes:Number = _time.getMinutes();  //分
+				var hours:Number = _time.getHours();      //时
+				var day:Number = _time.getDay();          //星期
+				var date:Number = _time.getDate();        //日
+				var month:Number = _time.getMonth()+1;     //月
+				var year:Number = _time.getFullYear();    //年          
+				timer = new Timer(1000);
+				
+				if(w==0){
+					week="星期天";
+				}
+				if(w==1){
+					week="星期一";
+				}
+				if(w==2){
+					week="星期二";
+				}
+				if(w==3){
+					week="星期三";
+				}
+				if(w==4){
+					week="星期四";
+				}
+				if(w==5){
+					week="星期五";
+				}
+				if(w==6){
+					week="星期六";
+				}
+				
+				
+				if (month<10) 
+				{
+					monStr = "0"+String(month);
+				}
+				else
+				{
+					monStr = String(month);
+				} 
+				
+				if (date<10)
+				{
+					dateStr = "0"+String(date);
+				}   
+				else
+				{
+					dateStr = String(date);
+				}  
+				
+				if (hours<10)
+				{
+					hoursStr = "0"+String(hours);
+				}            
+				else
+				{
+					hoursStr = String(hours);
+				}
+				
+				if (minutes<10)
+				{
+					minutesStr = "0"+String(minutes);
+				}
+				else
+				{
+					minutesStr = String(minutes);
+				}
+				
+				if (seconds<10)
+				{
+					secondsStr = "0"+String(seconds);
+				}
+				else
+				{
+					secondsStr = String(seconds);
+				}
+				dateTimeStr.text = year+"年"+monStr+"月"+dateStr+"日 "+hoursStr+":"+minutesStr+":"+secondsStr;      //响应每秒更新一次
+			}
+			
+			public function timeHandler(evt:TimerEvent):void
+			{
+				this.showCurDate();
+			}  
+			
+            private function creationCompleteHandler(event:FlexEvent):void
+            {
+                if (configData)
+                {
+
+					init();
+
+					//设置用户,判断用户权限
+					var queryStringFromUrl:String = ExternalInterface.call("window.location.search.substring", 1);
+					if (queryStringFromUrl)
+					{
+						var params:Array = queryStringFromUrl.split('&');
+						var length:uint = params.length;
+						
+						for (var ii:uint = 0, index:int = -1; ii < length; ii++)
+						{
+							var kvPair:String = params[ii];
+							if ((index = kvPair.indexOf("=")) > 0)
+							{
+								var key:String = kvPair.substring(0, index);
+								var value:String = kvPair.substring(index + 1);
+								if (key)
+								{
+									urlConfigParams[key] = decodeURIComponent(value);
+								}
+							}
+						}
+					}
+					
+					username = urlConfigParams["u"]; 
+					userType = urlConfigParams["type"]; 
+					
+                }
+            }
+
+
+
+           
+			/*
+			*  控制分类显示操作部分  
+			*  Start
+			*/
+			private function buildVisibleLayers(value:Array):ArrayCollection
+			{
+				var ac:ArrayCollection = new ArrayCollection();
+				var li:LayerInfo
+				for each( li in value){
+					if(li.defaultVisibility)
+						ac.addItem(li.layerId);
+				}
+				return ac;
+			}
+			
+			protected  function showLayer(layer:Layer):void
+			{
+				layer.visible = true;
+				var visibleLayers:ArrayCollection;
+				if(layer is ArcGISDynamicMapServiceLayer)
+				{
+					//获取当前可见图层列表
+					var agsDMS:ArcGISDynamicMapServiceLayer = layer as ArcGISDynamicMapServiceLayer; 
+					if(!agsDMS.visibleLayers){
+						visibleLayers = buildVisibleLayers(agsDMS.layerInfos);
+					}else{
+						visibleLayers = agsDMS.visibleLayers as ArrayCollection;
+					}
+					
+					//在当前可见图层列表中加入要显示的图层
+					visibleLayers.addItem(11);
+				}
+				else if(layer is ArcIMSMapServiceLayer)
+				{
+					//获取当前可见图层列表
+					if(!ArcGISDynamicMapServiceLayer(layer).visibleLayers){
+						visibleLayers = buildVisibleLayers(ArcIMSMapServiceLayer(layer).layerInfos);
+					}else{
+						visibleLayers = ArcIMSMapServiceLayer(layer).visibleLayers as ArrayCollection;
+					}
+					
+					//在当前可见图层列表中加入要显示的图层
+					visibleLayers.addItem(11);
+				}
+				//设置鼠标显示状态
+				if (visibleLayers)
+				{
+					cursorManager.setBusyCursor();
+				}
+			}
+			
+			protected function hideLayer(layer:Layer):void
+			{
+				layer.visible = false;
+				var visibleLayers:ArrayCollection;
+				if(layer is ArcGISDynamicMapServiceLayer)
+				{
+					//获取当前可见图层列表
+					if(!ArcGISDynamicMapServiceLayer(layer).visibleLayers){
+						visibleLayers = buildVisibleLayers(ArcGISDynamicMapServiceLayer(layer).layerInfos);
+					}else{
+						visibleLayers = ArcGISDynamicMapServiceLayer(layer).visibleLayers as ArrayCollection;
+					}
+					//查找要隐藏的图层的index
+					var index:int=visibleLayers.getItemIndex(11);
+					//在当前可见图层列表中去除要隐藏的图层
+					if (index != -1)
+					{
+						visibleLayers.removeItemAt(index);
+					}
+				}
+				else if(layer is ArcIMSMapServiceLayer)
+				{
+					//获取当前可见图层列表
+					if(!ArcIMSMapServiceLayer(layer).visibleLayers){
+						visibleLayers = buildVisibleLayers(ArcIMSMapServiceLayer(layer).layerInfos);
+					}else{
+						visibleLayers = ArcIMSMapServiceLayer(layer).visibleLayers as ArrayCollection;
+					}
+					
+					//查找要隐藏的图层的index
+					var index2:int=visibleLayers.getItemIndex(11);
+					//在当前可见图层列表中去除要隐藏的图层
+					if (index2 != -1)
+					{
+						visibleLayers.removeItemAt(index2);
+					}
+				}
+				//设置鼠标显示状态
+				if (visibleLayers)
+				{
+					cursorManager.setBusyCursor();
+				}
+			}
+			
+			
+			private	const  enterpriseName:String = "公众聚集场所";
+			private	const  industryName:String = "工矿商贸企业";
+			private	const  smallShopName:String = "三小场所";
+			
+			private function hideAll():void
+			{
+				var dyn1:FeatureLayer = map.getLayer(enterpriseName) as FeatureLayer;
+				var dyn2:FeatureLayer = map.getLayer(industryName) as FeatureLayer;
+				var dyn3:FeatureLayer = map.getLayer(smallShopName) as FeatureLayer;
+				hideLayer(dyn1);
+				hideLayer(dyn2);	
+				hideLayer(dyn3);
+				
+				allShowID.source = "assets/images/images/1pixel.png";
+				industryID.source = "assets/images/images/1pixel.png";
+				publicID.source = "assets/images/images/1pixel.png";
+				smallID.source = "assets/images/images/1pixel.png";
+				
+			}
+			
+			private function showAll():void
+			{
+				var dyn1:FeatureLayer = map.getLayer(enterpriseName) as FeatureLayer;
+				var dyn2:FeatureLayer = map.getLayer(industryName) as FeatureLayer;
+				var dyn3:FeatureLayer = map.getLayer(smallShopName) as FeatureLayer;
+				showLayer(dyn1);
+				showLayer(dyn2);	
+				showLayer(dyn3);	
+			}
+			
+			protected function AllShow_clickHandler(event:MouseEvent):void
+			{
+				hideAll();
+				showAll();
+				
+				allShowID.source = "assets/images/images/cover_show.png";
+			}
+			
+			protected function IndustryDistrict_clickHandler( event:MouseEvent ):void
+			{
+				hideAll();
+				var dyn:FeatureLayer = map.getLayer(industryName) as FeatureLayer;
+				showLayer(dyn);
+				
+				industryID.source = "assets/images/images/industry_show.png";
+			}
+			
+			protected function Enterprise_clickHandler( event:MouseEvent ):void
+			{
+				hideAll();
+				var dyn:FeatureLayer = map.getLayer(enterpriseName) as FeatureLayer;
+				showLayer(dyn);
+				
+				publicID.source = "assets/images/images/public_show.png";
+			}
+			
+			protected  function SmallShop_clickHandler( event:MouseEvent ):void
+			{
+				hideAll();
+				var dyn:FeatureLayer = map.getLayer(smallShopName) as FeatureLayer;
+				showLayer(dyn);
+				
+				smallID.source = "assets/images/images/small_show.png";
+			}
+			
+			protected function backendManager_clickHandler(event:MouseEvent):void
+			{
+				if(userType =="1")
+				{
+					AppEvent.dispatch("USERMANAGEREVENT");
+					if(isBackPortal){
+						backPortalID.source = "assets/images/images/1pixel.png";
+						isBackPortal = false;
+					}else{
+						backPortalID.source = "assets/images/images/backPortal.png";
+						isBackPortal = true;
+					}	
+				}
+				else
+				{
+					mx.controls.Alert.show("您没有管理权限！","权限消息");
+				}
+				
+			}
+			
+			protected function allShow_mouseOverHandler(event:MouseEvent):void
+			{
+				currentState = "Allover";
+			}
+			
+			protected function allShow_mouseOutHandler(event:MouseEvent):void
+			{
+				currentState = "Allnormal";
+				
+			}
+			
+			
+			protected function industry_mouseOverHandler(event:MouseEvent):void
+			{
+				currentState = "Industryover";
+			}
+			
+			protected function industry_mouseOutHandler(event:MouseEvent):void
+			{
+				currentState = "Industrynormal";
+				
+			}
+			
+			protected function crowd_mouseOverHandler(event:MouseEvent):void
+			{
+				currentState = "Publicover";
+				
+			}
+			
+			protected function crowd_mouseOutHandler(event:MouseEvent):void
+			{
+				currentState = "Publicnormal";
+				
+			}
+			
+			protected function small_mouseOverHandler(event:MouseEvent):void
+			{
+				currentState = "Smallover";
+				
+			}
+			
+			protected function small_mouseOutHandler(event:MouseEvent):void
+			{
+				currentState = "Smallnormal";
+				
+			}
+			
+			//搜索操作开始
+			protected function search_clickHandler(event:MouseEvent):void
+			{
+				AppEvent.dispatch("GETSEARCHRES",txtSearch.text);
+			}
+			
+			
+			
+		]]>
+    </fx:Script>
+
+	<s:BorderContainer width="100%" height="100%" borderVisible="false">
+		<s:layout>
+			<s:VerticalLayout gap="0"/>
+		</s:layout>
+		<!--标题栏-->
+		<s:BorderContainer width="100%" height="87" backgroundColor="#0776d4" borderVisible="false">
+			<s:Image y="0" left="0" source="assets/images/images/header_left.png"/>
+			<s:Image y="0" right="0" source="assets/images/images/header_right.png"/>
+			<s:Group width="100%" height="36" top="0">
+				<s:layout>
+					<s:BasicLayout/>
+				</s:layout>
+				<s:Image y="0" right="0" source="assets/images/images/timer.png"/>
+				<s:Image id="backPortalID" y="0" right="98" source="assets/images/images/1pixel.png"/>
+				<s:Group width="680" height="36" top="0" right="0">
+					<s:layout>
+						<s:BasicLayout/>
+					</s:layout>
+					<s:Label id="dateTimeStr" right="330" color="#2d97e9" fontSize="12" paddingRight="10"
+							 text="" verticalAlign="middle" verticalCenter="0"/>
+					<s:Label right="195" color="#2d97e9" text="{username}" fontSize="12" verticalCenter="0"/>
+					<!--后台管理-->
+					<s:Label right="98" width="60" height="30" buttonMode="true"
+							 click="backendManager_clickHandler(event)"
+							 color="#ffffff" text="" useHandCursor="true" verticalCenter="0"/>
+					<s:Label right="5" width="60" height="30" buttonMode="true"
+							 click="navigateToURL(new URLRequest('index.html'),'_self')"
+							 color="#ffffff" text="" useHandCursor="true" verticalCenter="0"/>
+				</s:Group>
+			</s:Group>
+			<s:HGroup right="0" width="100%" height="100%" gap="5" paddingRight="5"
+					  verticalAlign="middle">
+				
+				
+				
+			</s:HGroup>
+		</s:BorderContainer>
+		<!--菜单栏-->
+		<s:BorderContainer width="100%" height="44" backgroundColor="#0ea1f7" borderVisible="false">
+			<s:Image y="0" left="0" source="assets/images/images/menu_left.png"/>
+			<s:Image y="0" right="0" source="assets/images/images/search.png"/>
+			<!--控制划过-->
+			<s:Image source.Allnormal="assets/images/images/1pixel.png"
+					 source.Allover="assets/images/images/cover_show.png"
+					 x="-12" y="0"/>
+			
+			<s:Image x="122" y="0"
+					 source.Industrynormal="assets/images/images/1pixel.png"
+					 source.Industryover="assets/images/images/industry_show.png"/>
+			
+			<s:Image x="262" y="0"
+					 source.Publicnormal="assets/images/images/1pixel.png"
+					 source.Publicover="assets/images/images/public_show.png"/>
+			
+			<s:Image x="393" y="0" 
+					 source.Smallnormal="assets/images/images/1pixel.png"
+					 source.Smallover="assets/images/images/small_show.png"/>
+			
+			<!--控制选择 -->
+			<s:Image id="allShowID" 
+					 x="-12" y="0"
+					 source="assets/images/images/cover_show.png"/>
+			
+			<s:Image id="industryID" x="122" y="0"
+					 source="assets/images/images/1pixel.png"/>
+			
+			<s:Image  id="publicID" x="262" y="0"
+					  source="assets/images/images/1pixel.png"/>
+			
+			<s:Image  id="smallID" x="393" y="0" 
+					  source="assets/images/images/1pixel.png"/>
+			
+			
+			<s:Label left="39" width="60" height="30" buttonMode="true"
+					 click="AllShow_clickHandler(event)" mouseOver="allShow_mouseOverHandler(event)"
+					 mouseOut="allShow_mouseOutHandler(event)"
+					 color="#ffffff" text="" useHandCursor="true" verticalCenter="0"/>
+			<s:Label left="173" width="60" height="30" buttonMode="true"
+					 click="IndustryDistrict_clickHandler(event)" mouseOver="industry_mouseOverHandler(event)"
+					  mouseOut="industry_mouseOutHandler(event)"
+					 color="#ffffff" text="" useHandCursor="true" verticalCenter="0"/>
+			<s:Label left="314" width="60" height="30" buttonMode="true"
+					 click="Enterprise_clickHandler(event)" mouseOver="crowd_mouseOverHandler(event)"
+					  mouseOut="crowd_mouseOutHandler(event)"
+					 color="#ffffff" text="" useHandCursor="true" verticalCenter="0"/>
+			<s:Label left="444" width="60" height="30" buttonMode="true"
+					 click="SmallShop_clickHandler(event)" mouseOver="small_mouseOverHandler(event)"
+					  mouseOut="small_mouseOutHandler(event)"
+					 color="#ffffff" text="" useHandCursor="true" verticalCenter="0"/>
+			
+			<!--准确搜索-->
+			<s:TextInput id="txtSearch" right="37" width="173" height="25" borderColor="#d2d2d2"
+						 borderVisible="false" text="" verticalCenter="0" enter="search_clickHandler(null)"/>
+			<s:Label height="30" buttonMode="true"
+					 click="search_clickHandler(event)" color="#ffffff" text=""
+					 useHandCursor="true" verticalCenter="0"
+					 right="6" width="25" />
+		</s:BorderContainer>
+	</s:BorderContainer>
+</viewer:BaseWidget>

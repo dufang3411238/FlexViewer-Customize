@@ -1,0 +1,30 @@
+<?xml version="1.0" ?>
+<configuration>
+    <title>{NAME}</title>
+    <fields>
+        <field name="NAME"/> <!-- Used in title, do not repeat in content -->
+        <field name="TOTPOP_CY" alias="Population" visible="true"/>  <!-- Overwrite alias specified in Map Service -->
+        <field name="MEDHINC_CY" alias="Median Household Income" visible="true"/>
+        <field name="HINC0_25"  alias="less than $25,000"/>
+        <field name="HINC25_50" alias="$25,000 - $49,999"/>
+        <field name="HINC50_CY" alias="$50,000 - $74,999"/>
+        <field name="HINC75_CY" alias="$75,000 - $99,999"/>
+        <field name="HINC100_CY" alias="$100,000 - $149,999"/>
+        <field name="HINC150_CY" alias="$150,000 - $199,999"/>
+        <field name="HINC200_CY" alias="$200,000 or greater"/>
+    </fields>
+    <description>State population: {TOTPOP_CY}.&lt;br&gt;Median household income: ${MEDHINC_CY}.</description>
+    <medias>
+        <media type="columnchart" title="Households by income"
+               chartfields="HINC0_25,HINC25_50,HINC50_CY,HINC75_CY,HINC100_CY,HINC150_CY,HINC200_CY"/>
+    </medias>
+</configuration>
+
+<!--
+    Pop-up configuration file for:
+    http://server.arcgisonline.com/ArcGIS/rest/services/Demographics/USA_Median_Household_Income/MapServer/4
+
+    See pop-up documentation at
+    http://links.esri.com/flexviewer/popups
+-->
+

@@ -1,0 +1,24 @@
+<?xml version="1.0" ?>
+<configuration>
+    <zoomscale>50000</zoomscale>
+    <shareresults>false</shareresults>
+    <layers>
+        <layer>
+            <name>公共聚集场所</name>
+            <url>http://113.108.119.116:6080/arcgis/rest/services/NanShanMercatorNew/FeatureServer/1</url>
+            <expression>企业名称 LIKE ('%[value]%')</expression>
+            <textsearchlabel>按属性选择</textsearchlabel>
+            <titlefield>企业名称</titlefield>
+            <fields>
+                <field name="企业名称" alias="企业名称"/>
+                <field name="生产经营地址" alias="生产经营地址"/>
+                <field name="法定代表人_" alias="法定代表人_"/>
+                <field name="法人手机电话_" alias="法人手机电话_"/>
+                <field name="联系人_" alias="联系人_"/>
+                <field name="联系人电话_" alias="联系人电话_"/>
+                <field name="行业类别_" alias="行业类别_"/>
+            </fields>
+            <orderbyfields>企业名称 ASC</orderbyfields>
+        </layer>
+    </layers>
+</configuration>

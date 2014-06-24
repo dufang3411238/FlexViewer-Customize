@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<actionScriptProperties analytics="false" mainApplicationPath="index.mxml" projectUUID="034d1e94-f1a9-4d3b-a1f5-4df718f153ab" version="10">
+  <compiler additionalCompilerArguments="-locale=zh_CN -source-path=locale/{locale} -keep-all-type-selectors=true -allow-source-path-overlap=true" autoRSLOrdering="true" copyDependentFiles="true" fteInMXComponents="false" generateAccessible="true" htmlExpressInstall="true" htmlGenerate="true" htmlHistoryManagement="false" htmlPlayerVersionCheck="true" includeNetmonSwc="false" outputFolderPath="bin-debug" removeUnusedRSL="true" sourceFolderPath="src" strict="true" targetPlayerVersion="0.0.0" useApolloConfig="false" useDebugRSLSwfs="false" verifyDigests="true" warn="true">
+    <compilerSourcePath>
+      <compilerSourcePathEntry kind="1" linkType="1" path="locale"/>
+    </compilerSourcePath>
+    <libraryPath defaultLinkType="0">
+      <libraryPathEntry kind="4" path="">
+        <excludedEntries>
+          <libraryPathEntry kind="3" linkType="1" path="${PROJECT_FRAMEWORKS}/libs/flex.swc" useDefaultLinkType="false"/>
+          <libraryPathEntry kind="3" linkType="1" path="${PROJECT_FRAMEWORKS}/libs/core.swc" useDefaultLinkType="false"/>
+        </excludedEntries>
+      </libraryPathEntry>
+      <libraryPathEntry kind="1" linkType="1" path="libs"/>
+    </libraryPath>
+    <sourceAttachmentPath/>
+  </compiler>
+  <applications>
+    <application path="index.mxml"/>
+    <application path="tindex.mxml"/>
+  </applications>
+  <modules>
+    <module application="src/tindex.mxml" destPath="widgets/Coordinate/CoordinateWidget.swf" optimize="true" sourcePath="src/widgets/Coordinate/CoordinateWidget.mxml"/>
+    <module application="src/tindex.mxml" destPath="widgets/Draw/DrawWidget.swf" optimize="true" sourcePath="src/widgets/Draw/DrawWidget.mxml"/>
+    <module application="src/tindex.mxml" destPath="widgets/Edit/EditWidget.swf" optimize="true" sourcePath="src/widgets/Edit/EditWidget.mxml"/>
+    <module application="src/tindex.mxml" destPath="widgets/HeaderController/HeaderControllerWidget.swf" optimize="true" sourcePath="src/widgets/HeaderController/HeaderControllerWidget.mxml"/>
+    <module application="src/tindex.mxml" destPath="widgets/Legend/LegendWidget.swf" optimize="true" sourcePath="src/widgets/Legend/LegendWidget.mxml"/>
+    <module application="src/tindex.mxml" destPath="widgets/Navigation/NavigationWidget.swf" optimize="true" sourcePath="src/widgets/Navigation/NavigationWidget.mxml"/>
+    <module application="src/tindex.mxml" destPath="widgets/OverviewMap/OverviewMapWidget.swf" optimize="true" sourcePath="src/widgets/OverviewMap/OverviewMapWidget.mxml"/>
+    <module application="src/tindex.mxml" destPath="widgets/Custom/ThreeClassifyWidget.swf" optimize="true" sourcePath="src/widgets/Custom/ThreeClassifyWidget.mxml"/>
+    <module application="src/tindex.mxml" destPath="widgets/LayerList/LayerListWidget.swf" optimize="true" sourcePath="src/widgets/LayerList/LayerListWidget.mxml"/>
+    <module application="src/tindex.mxml" destPath="widgets/WidgetContainer/WidgetContainerWidget.swf" optimize="true" sourcePath="src/widgets/WidgetContainer/WidgetContainerWidget.mxml"/>
+    <module application="src/tindex.mxml" destPath="widgets/MapSwitcher/MapSwitcherWidget.swf" optimize="true" sourcePath="src/widgets/MapSwitcher/MapSwitcherWidget.mxml"/>
+    <module application="src/tindex.mxml" destPath="widgets/AttributeTable/AttributeTableWidget.swf" optimize="true" sourcePath="src/widgets/AttributeTable/AttributeTableWidget.mxml"/>
+    <module application="src/tindex.mxml" destPath="widgets/Search/SearchWidget.swf" optimize="true" sourcePath="src/widgets/Search/SearchWidget.mxml"/>
+    <module application="src/tindex.mxml" destPath="widgets/Query/QueryWidget.swf" optimize="true" sourcePath="src/widgets/Query/QueryWidget.mxml"/>
+    <module application="src/tindex.mxml" destPath="widgets/Custom/LeftPanelWidget.swf" optimize="true" sourcePath="src/widgets/Custom/LeftPanelWidget.mxml"/>
+    <module application="src/tindex.mxml" destPath="widgets/Custom/EditorWidget.swf" optimize="true" sourcePath="src/widgets/Custom/EditorWidget.mxml"/>
+    <module application="src/tindex.mxml" destPath="widgets/Custom/LegendWidget.swf" optimize="true" sourcePath="src/widgets/Custom/LegendWidget.mxml"/>
+    <module application="src/tindex.mxml" destPath="widgets/Custom/LeftPanelWidgetNew.swf" optimize="true" sourcePath="src/widgets/Custom/LeftPanelWidgetNew.mxml"/>
+    <module application="src/tindex.mxml" destPath="widgets/UserManager/UserManager.swf" optimize="true" sourcePath="src/widgets/UserManager/UserManager.mxml"/>
+    <module application="src/tindex.mxml" destPath="widgets/UserManager/testUserManager.swf" optimize="true" sourcePath="src/widgets/UserManager/testUserManager.mxml"/>
+  </modules>
+  <buildCSSFiles/>
+  <flashCatalyst validateFlashCatalystCompatibility="false"/>
+</actionScriptProperties>

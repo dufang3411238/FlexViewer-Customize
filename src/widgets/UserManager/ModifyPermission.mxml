@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Group xmlns:fx="http://ns.adobe.com/mxml/2009"
+		 xmlns:s="library://ns.adobe.com/flex/spark"
+		 xmlns:mx="library://ns.adobe.com/flex/mx"
+		 width="300" height="200">
+	<s:layout>
+		<s:HorizontalLayout gap="0"/>
+	</s:layout>
+	<fx:Declarations>
+		<s:RadioButtonGroup id="permissionGroup"/>
+	</fx:Declarations>
+	<fx:Script>
+		<![CDATA[
+			import mx.collections.ArrayCollection;
+			import mx.events.FlexEvent;
+			import mx.rpc.events.ResultEvent;
+			import mx.controls.Alert;
+			import com.esri.viewer.AppEvent;
+			[Bindable]
+			public var curType:String = "2";
+			private var users:ArrayCollection;
+
+			
+			
+			protected function Confirm_clickHandler(event:MouseEvent):void
+			{
+				AppEvent.dispatch("MODIFYPERMISSION",permissionGroup.selectedValue);
+				
+			}
+			
+			
+			protected function reset_clickHandler(event:MouseEvent):void
+			{
+				permissionGroup.selectedValue = "2";
+			}
+			
+		]]>
+	</fx:Script>
+	
+	<fx:Declarations>
+		<!-- 将非可视元素（例如服务、值对象）放在此处 -->
+	</fx:Declarations>
+	
+		<s:BorderContainer top="30" width="300" height="200" borderVisible="false"
+						   horizontalCenter="0">
+			<s:layout>
+				<s:VerticalLayout gap="50" paddingLeft="20" paddingTop="30"/>
+			</s:layout>
+			<s:VGroup width="254" height="63" fontSize="15" gap="10" paddingLeft="30">
+				<s:RadioButton label="普通用户" groupName="permissionGroup" selected="true" value="2"/>
+				<s:RadioButton label="管理员"  groupName="permissionGroup" value="1"/>	
+			</s:VGroup>
+			
+			<s:HGroup width="255" gap="20" paddingLeft="20">
+				<s:Image click="Confirm_clickHandler(event)" source="@Embed('assets/images/modify.png')"/>
+				<s:Image click="reset_clickHandler(event)" source="@Embed('assets/images/reset.png')"/>
+			</s:HGroup>
+
+		</s:BorderContainer>
+</s:Group>

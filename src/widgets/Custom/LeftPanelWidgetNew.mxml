@@ -1,0 +1,911 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+///////////////////////////////////////////////////////////////////////////
+// Copyright (c) 2010-2011 Esri. All Rights Reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+///////////////////////////////////////////////////////////////////////////
+-->
+<viewer:BaseWidget xmlns:fx="http://ns.adobe.com/mxml/2009"
+				   xmlns:s="library://ns.adobe.com/flex/spark"
+				   xmlns:mx="library://ns.adobe.com/flex/mx"
+				   xmlns:viewer="com.esri.viewer.*"
+				   height="100%" xmlns:Search="widgets.Search.*" creationComplete="basewidget1_creationCompleteHandler(event)"
+				    widgetConfigLoaded="widgetConfigLoadedHandler()">
+	
+	<fx:Script>
+		<![CDATA[
+			import com.esri.ags.FeatureSet;
+			import com.esri.ags.Graphic;
+			import com.esri.ags.Map;
+			import com.esri.ags.events.LayerEvent;
+			import com.esri.ags.geometry.Geometry;
+			import com.esri.ags.geometry.MapPoint;
+			import com.esri.ags.layers.FeatureLayer;
+			import com.esri.ags.layers.supportClasses.FeatureCollection;
+			import com.esri.ags.layers.supportClasses.LayerDetails;
+			import com.esri.ags.portal.PopUpRenderer;
+			import com.esri.ags.portal.supportClasses.PopUpInfo;
+			import com.esri.ags.portal.supportClasses.PopUpMediaInfo;
+			import com.esri.ags.renderers.SimpleRenderer;
+			import com.esri.ags.symbols.PictureMarkerSymbol;
+			import com.esri.ags.symbols.SimpleFillSymbol;
+			import com.esri.ags.symbols.SimpleLineSymbol;
+			import com.esri.ags.symbols.SimpleMarkerSymbol;
+			import com.esri.ags.symbols.Symbol;
+			import com.esri.ags.tasks.supportClasses.Query;
+			import com.esri.viewer.AppEvent;
+			import com.esri.viewer.components.SearchEditorPopUpRenderer;
+			import com.esri.viewer.components.SearchPopUpRenderer;
+			import com.esri.viewer.utils.ErrorMessageUtil;
+			import com.esri.viewer.utils.SymbolParser;
+			
+			import mx.collections.ArrayCollection;
+			import mx.events.FlexEvent;
+			import mx.managers.PopUpManager;
+			import mx.rpc.AsyncResponder;
+			import mx.utils.StringUtil;
+			
+			import spark.components.TitleWindow;
+			import spark.components.supportClasses.ItemRenderer;
+			import spark.formatters.DateTimeFormatter;
+			
+			import widgets.supportClasses.FeatureSetUtil;
+			import widgets.supportClasses.ResultAttributes;
+			import widgets.supportClasses.ResultItem;
+
+			[Bindable]
+			private var SearchResAC:ArrayCollection;
+			private var SearchResACDone:ArrayCollection;
+			private var searchRes1:SearchResultDataGroup;
+			public var twTab:TitleWindow;
+			
+			private const NONSTOP_RESIZE_GAP:Number = 25;
+			
+			private const MIN_HEADING_WIDTH:Number = 100;
+			
+			private var minHeadingGroupWidth:Number;
+			
+			[Bindable]
+			private var linkList:ArrayList;
+			
+			[Bindable]
+			private var headingWidth:Number = MIN_HEADING_WIDTH;
+			
+			[Bindable]
+			private var widgetItemArrCol:ArrayCollection;
+			
+			[Bindable]
+			private var groupWidgetArrCol:ArrayCollection;
+			
+			[Bindable]
+			private var title:String;
+			
+			[Bindable]
+			private var dateTiemFormatter:DateTimeFormatter;
+			[Bindable]
+			private var dateStr:String;
+			
+			private var _time:Date;     //日期
+			private var timer:Timer;    //计数器
+			
+			public static var urlConfigParams:Object = {};
+			[Bindable]
+			private var username:String;
+			
+			
+			//搜索变量
+			private var resultFeatureLayer:FeatureLayer;
+			private var popUpRenderer:SearchPopUpRenderer = new SearchPopUpRenderer();
+			private var editorPopUpRenderer:SearchEditorPopUpRenderer = new SearchEditorPopUpRenderer();
+			
+			[Bindable]
+			private var searchResultAC:ArrayCollection;
+			
+			private var resultMarkerSymbol:Symbol;
+			private var resultLineSymbol:Symbol;
+			private var resultFillSymbol:Symbol;
+			private var shareResults:Boolean;
+			
+			private var scallbar:Scroller;
+			
+			private var searchCount:uint = 0;
+			private var configSearchText:Array;
+			private var loadingLabel:String;
+			private var nolayerLabel:String;
+			private var queryLayer:FeatureLayer;
+			private var queryGeom:Geometry;
+			private var queryExpr:String;
+			private var queryFields:XMLList;
+			private var queryTitleField:String;
+			private var queryLinkField:String;
+			private var queryLinkAlias:String;
+			private var querySymbol:Symbol;
+			private var resultsLabel:String;
+			private var selectionLabel:String;
+			private var gFeatureSet:FeatureSet;
+			private var zoomScale:Number = 50000;
+			private var pointSearchTolerance:Number = 6;
+			
+			[Bindable]
+			private var featureLayers:Array;
+			private var SearchText:String;
+			private var SearchConditions:String;
+			[Bindable]
+			private var SearchALlDate:ArrayCollection;
+			private var isSpecificSearch:Boolean=false;
+			
+			private var userType:String = "2";
+			private function getSearchData(event:AppEvent):void
+			{
+				isSpecificSearch = true;
+				SearchText = event.data as String;
+				searchCount = 0;
+				if (resultFeatureLayer)
+				{
+					resultFeatureLayer.featureCollection = new FeatureCollection(new FeatureSet(), resultFeatureLayer.layerDetails); // empty featureset to clear
+				}
+				if (searchResultAC)
+				{
+					searchResultAC.removeAll();
+				}
+				gFeatureSet = null;
+				searchByCustom(0);
+				if(SearchText)
+				{
+					this.currentState = "RESUALT_STATE";
+				}
+			}
+			protected function backToSearch_clickHandler(event:MouseEvent):void
+			{
+				if (resultFeatureLayer)
+				{
+					resultFeatureLayer.featureCollection = new FeatureCollection(new FeatureSet(), resultFeatureLayer.layerDetails); // empty featureset to clear
+				}
+				this.currentState = "SEARCH_STATE";
+			}
+			
+			protected function goToSearchRes_clickHandler(event:MouseEvent):void
+			{
+				var sssq:String = DDL_SSSQ.selectedItem == "不限"? " 所属社区 like '%%'" : " 所属社区 like '%"+DDL_SSSQ.selectedItem+"%'";
+				var qymx:String = TXT_QYMC.text == "" ? " 企业名称 like '%%'" : " 企业名称 like '%"+TXT_QYMC.text+"%'";
+				var hylb:String = DDL_HYLB.selectedItem == "不限"? " 行业类别 like '%%'" : " 行业类别 like '%"+DDL_HYLB.selectedItem+"%'";
+				var jqfw:String = TXT_JQFW.text == "" ? " 经营范围 like '%%'" : " 经营范围 like '%"+TXT_JQFW.text+"%'";
+				var aqdj:String = DDL_AQDJ.selectedItem == "不限"? " 安全等级 like '%%'" : " 安全等级 like '%"+DDL_AQDJ.selectedItem+"%'";
+				var jgdw:String = DDL_JGDW.selectedItem == "不限"? " 监管单位 like '%%'" : " 监管单位 like '%"+DDL_JGDW.selectedItem+"%'";
+				var  jgr:String	= DDL_JGR.text == "" ? " 监管人 like '%%'" : " 监管人 like '%"+DDL_JGR.text+"%'";
+					
+				SearchConditions = 	sssq + " AND " +
+									qymx + " AND " +
+									hylb + " AND " +
+									jqfw + " AND " +
+									aqdj + " AND " +
+									jgdw + " AND " +
+									jgr	;
+				
+				
+				searchCount = 0;
+				if (resultFeatureLayer)
+				{
+					resultFeatureLayer.featureCollection = new FeatureCollection(new FeatureSet(), resultFeatureLayer.layerDetails); // empty featureset to clear
+				}
+				if (searchResultAC)
+				{
+					searchResultAC.removeAll();
+				}
+				gFeatureSet = null;
+				searchByCustom(0);
+				
+				this.currentState = "RESUALT_STATE";
+			}
+			
+			protected function clearSearchConditons_clickHandler(event:MouseEvent):void
+			{
+				
+				DDL_SSSQ.selectedIndex = 0;
+				TXT_QYMC.text = "";
+				DDL_HYLB.selectedIndex = 0;
+				TXT_JQFW.text = "";
+				DDL_AQDJ.selectedIndex = 0;
+			//	DF_CLRQ.selectedDate = new Date();
+				//DDL_CLRQEND.selectedIndex = 0;
+				DDL_JGDW.selectedIndex = 0;
+				DDL_JGR.text = "";
+			}
+			
+			protected function basewidget1_creationCompleteHandler(event:FlexEvent):void
+			{
+				AppEvent.addListener("GETSEARCHRES",getSearchData);
+				twTab = new TitleWindow();
+				SearchALlDate = new ArrayCollection();
+				var td:Date = new Date();
+				for(var d:int = 1990; d<=td.fullYear; d++)
+				{
+					SearchALlDate.addItem(d);
+				}
+				
+				//获得当前用户类型
+				getUserType();
+			}
+			
+			
+			//搜索操作开始
+			
+			private function widgetConfigLoadedHandler():void
+			{
+				if (configXML)
+				{
+					
+					shareResults = true;
+					
+					var symbolParser:SymbolParser = new SymbolParser();
+					
+					configSearchText = [];
+					var lyrList:XMLList = configXML..layer;
+					for (var i:int = 0; i < lyrList.length(); i++)
+					{
+						var lyrURL:String = lyrList[i].url;
+						var lyrLabel:String = lyrList[i].name;
+						var lyrExpr:String = lyrList[i].expression;
+						var lyrFields:XMLList = lyrList[i].fields;
+						var lyrTitleField:String = lyrList[i].titlefield;
+						var lyrLinkField:String = lyrList[i].linkfield;
+						var lyrSymbol:Symbol = symbolParser.parseSymbol(lyrList[i].symbol[0]);
+						var linkAlias:String = lyrList[i].linkfield.@alias[0];
+						var useAMF:String = lyrList[i].useamf;
+						var useProxy:Boolean = lyrList[i].useproxy[0] && lyrList[i].useproxy == "true";
+						
+						const orderByFieldsText:String = lyrList[i].orderbyfields[0];
+						var lyrOrderByFields:Array;
+						if (orderByFieldsText)
+						{
+							lyrOrderByFields = orderByFieldsText.split(',');
+						}
+						
+						var layer:FeatureLayer = new FeatureLayer();
+						layer.addEventListener(LayerEvent.LOAD, searchLayer_loadHandler);
+						layer.addEventListener(LayerEvent.LOAD_ERROR, searchLayer_faultHandler);
+						layer.url = lyrURL;
+						layer.name = buildLayerName(lyrLabel);
+						
+						if (useProxy && configData.proxyUrl)
+						{
+							layer.proxyURL = configData.proxyUrl;
+						}
+						if (useAMF)
+						{
+							layer.useAMF = useAMF == "true";
+						}
+						if (lyrFields && lyrFields[0].@all[0] == "true")
+						{
+							layer.outFields = [ "*" ];
+						}
+						else if (lyrFields)
+						{
+							var fields:XMLList = lyrFields.field;
+							layer.outFields = [];
+							for each (var fieldXML:XML in fields)
+							{
+								if (fieldXML.@name[0])
+								{
+									layer.outFields.push(fieldXML.@name[0]);
+								}
+							}
+						}
+						
+						var searchLayer:Object =
+							{
+								layer: layer,
+								label: lyrLabel,
+								expr: lyrExpr,
+								fields: lyrFields,
+								orderbyfields: lyrOrderByFields,
+								titlefield: lyrTitleField,
+								linkfield: lyrLinkField,
+								linkalias: linkAlias,
+								symbol: lyrSymbol
+							};
+						
+						if (lyrExpr)
+						{
+							configSearchText.push(searchLayer);
+						}
+					}
+					
+					const resultMarkerSymbolURL:String = configXML.symbols.picturemarkersymbol.@url || widgetIcon;
+					const parsedResultMarkerSymbolHeight:Number = parseFloat(configXML.symbols.picturemarkersymbol.@height[0]);
+					const resultMarkerSymbolHeight:Number = isNaN(parsedResultMarkerSymbolHeight) ? 0 : parsedResultMarkerSymbolHeight;
+					const parsedResultMarkerSymbolWidth:Number = parseFloat(configXML.symbols.picturemarkersymbol.@width[0]);
+					const resultMarkerSymbolWidth:Number = isNaN(parsedResultMarkerSymbolWidth) ? 0 : parsedResultMarkerSymbolWidth;
+					const resultMarkerSymbolXOffset:Number = (configXML.symbols.picturemarkersymbol.@xoffset != null) ? configXML.symbols.picturemarkersymbol.@xoffset : 0;
+					const resultMarkerSymbolYOffset:Number = (configXML.symbols.picturemarkersymbol.@yoffset != null) ? configXML.symbols.picturemarkersymbol.@yoffset : 0;
+					resultMarkerSymbol = new PictureMarkerSymbol(resultMarkerSymbolURL, resultMarkerSymbolWidth, resultMarkerSymbolHeight, resultMarkerSymbolXOffset, resultMarkerSymbolYOffset);
+					
+					const resultLineSymbolColor:uint = (configXML.symbols.simplelinesymbol.@color[0] != null) ? configXML.symbols.simplelinesymbol.@color : 0xFF0000;
+					const resultLineSymbolAlpha:Number = (configXML.symbols.simplelinesymbol.@alpha[0] != null) ? configXML.symbols.simplelinesymbol.@alpha : 0.8;
+					const resultLineSymbolWidth:Number = (configXML.symbols.simplelinesymbol.@width[0] != null) ? configXML.symbols.simplelinesymbol.@width : 2;
+					resultLineSymbol = new SimpleLineSymbol(SimpleLineSymbol.STYLE_SOLID, resultLineSymbolColor, resultLineSymbolAlpha, resultLineSymbolWidth);
+					
+					const resultFillSymbolColor:uint = (configXML.symbols.simplefillsymbol.@color[0] != null) ? configXML.symbols.simplefillsymbol.@color : 0xFF0000;
+					const resultFillSymbolAlpha:Number = (configXML.symbols.simplefillsymbol.@alpha[0] != null) ? configXML.symbols.simplefillsymbol.@alpha : 0.5;
+					const resultFillSymbolOutlineColor:uint = (configXML.symbols.simplefillsymbol.outline.@color[0] != null) ? configXML.symbols.simplefillsymbol.outline.@color : 0xFF0000;
+					const resultFillSymbolOutlineAlpha:Number = (configXML.symbols.simplefillsymbol.outline.@alpha[0] != null) ? configXML.symbols.simplefillsymbol.outline.@alpha : 0.8;
+					const resultFillSymbolOutlineWidth:Number = (configXML.symbols.simplefillsymbol.outline.@width[0] != null) ? configXML.symbols.simplefillsymbol.outline.@width : 2;
+					resultFillSymbol = new SimpleFillSymbol(SimpleFillSymbol.STYLE_SOLID, resultFillSymbolColor, resultFillSymbolAlpha, new SimpleLineSymbol(SimpleLineSymbol.STYLE_SOLID, resultFillSymbolOutlineColor, resultFillSymbolOutlineAlpha, resultFillSymbolOutlineWidth));
+					
+					resultFeatureLayer = new FeatureLayer();
+					resultFeatureLayer.visible = false;
+					resultFeatureLayer.isEditable = false;
+					
+					resultFeatureLayer.addEventListener(FlexEvent.HIDE, resultFeatureLayer_hideHandler);
+					
+					var userTolerance:Number = configXML.tolerance;
+					if (userTolerance > 0)
+					{
+						pointSearchTolerance = userTolerance;
+					}
+					
+					if (Number(configXML.zoomscale) > 0)
+					{
+						zoomScale = Number(configXML.zoomscale);
+					}
+				}
+			}
+			
+			private function resultFeatureLayer_hideHandler(event:FlexEvent):void
+			{
+				hideInfoWindow();
+			}
+			
+			private function hideInfoWindow():void
+			{
+				if (map.infoWindow.contentOwner &&
+					((map.infoWindow.contentOwner is Graphic && Graphic(map.infoWindow.contentOwner).graphicsLayer === resultFeatureLayer) || map.infoWindow.contentOwner is Map))
+				{
+					map.infoWindow.hide();
+				} 
+			}
+			private function buildLayerName(name:String):String
+			{
+				var widgetName:String = configXML.layername || widgetTitle;
+				name = name ? name : widgetName;
+				
+				if (widgetName == name)
+				{
+					return shareResults ? widgetName : "hiddenLayer_" + widgetName;
+				}
+				
+				var layerNameTemplate:String = "{0} - {1}";
+				
+				layerNameTemplate =
+					shareResults ? layerNameTemplate : "hiddenLayer_" + layerNameTemplate;
+				
+				return StringUtil.substitute(layerNameTemplate, widgetName, name);
+			}
+			private function searchLayer_loadHandler(event:LayerEvent):void
+			{
+				var layer:FeatureLayer = event.layer as FeatureLayer;
+				layer.removeEventListener(LayerEvent.LOAD, searchLayer_loadHandler);
+				layer.removeEventListener(LayerEvent.LOAD_ERROR, searchLayer_faultHandler);
+				
+				layer.layerDetails.minScale = 0; // removing scale dependency
+				layer.layerDetails.maxScale = 0;
+			}
+			
+			private function searchLayer_faultHandler(event:LayerEvent):void
+			{
+				var layer:FeatureLayer = event.currentTarget as FeatureLayer;
+				
+				layer.removeEventListener(LayerEvent.LOAD, searchLayer_loadHandler);
+				layer.removeEventListener(LayerEvent.LOAD_ERROR, searchLayer_faultHandler);
+				
+				showLoadErrorMessage(event);
+			}
+			
+			
+			private function searchByCustom(o:int):void
+			{
+				//hideInfoWindow();  清除所有的搜索标记
+				if(configSearchText.length<=0)
+					return;
+				var searchLayer:Object = configSearchText[o];
+				
+				queryLayer = searchLayer.layer;
+				
+				if (queryLayer && !queryLayer.loaded)
+				{
+					queryLayer.addEventListener(LayerEvent.LOAD, queryLayer_loadHandler);
+					queryLayer.addEventListener(LayerEvent.LOAD_ERROR, queryLayer_loadErrorHandler);
+					
+					function queryLayer_loadHandler(event:LayerEvent):void
+					{
+						queryLayer.removeEventListener(LayerEvent.LOAD, queryLayer_loadHandler);
+						queryLayer.removeEventListener(LayerEvent.LOAD_ERROR, queryLayer_loadErrorHandler);
+						
+						searchByCustom(o);
+					}
+					
+					function queryLayer_loadErrorHandler(event:LayerEvent):void
+					{
+						queryLayer.removeEventListener(LayerEvent.LOAD, queryLayer_loadHandler);
+						queryLayer.removeEventListener(LayerEvent.LOAD_ERROR, queryLayer_loadErrorHandler);
+						
+						showLoadErrorMessage(event);
+					}
+					
+					return;
+				}
+				
+				queryExpr = searchLayer.expr;
+				queryFields = searchLayer.fields;
+				queryTitleField = searchLayer.titlefield;
+				queryLinkField = searchLayer.linkfield;
+				queryLinkAlias = searchLayer.linkalias;
+				querySymbol = searchLayer.symbol;
+				
+				if (queryLayer)
+				{
+					var expr:String;
+					if(!SearchText&&!isSpecificSearch)
+					{
+						expr = SearchConditions;
+					}
+					else
+					{
+						expr = queryExpr.replace(/\[value\]/g, SearchText);	
+					}
+					
+					
+					var query:Query = new Query();
+					
+					
+					//query.where = expr;
+					query.where = expr;//"企业名称 like '%公司%' AND 安全等级 like '%三级%' AND 成立日期 like '%2003%'";
+					query.outSpatialReference = map.spatialReference;
+					
+					const supportsServerSideSorting:Boolean = queryLayer.layerDetails
+						&& queryLayer.layerDetails.version >= 10.1
+						&& queryLayer.layerDetails.supportsAdvancedQueries;
+					const orderByFields:Array = searchLayer.orderbyfields;
+					if (supportsServerSideSorting && orderByFields)
+					{
+						query.orderByFields = orderByFields;
+					}
+					
+					
+					var queryOptions:Object =
+						{
+							supportsServerSideSorting: supportsServerSideSorting,
+							orderByFields: orderByFields,
+							queryFields: queryFields
+						};
+					
+					if(!SearchText&&isSpecificSearch)
+					{
+						//如果为精确搜索，但是参数为空则不进行搜索
+					}else{
+						queryLayer.queryFeatures(
+							query, new AsyncResponder(queryFeatures_resultHandler,
+								queryFeatures_faultHandler,
+								queryOptions));
+					}
+				}
+			}
+			
+			private function showLoadErrorMessage(event:LayerEvent):void
+			{
+				var errorMessage:String = getDefaultString("layerFailedToLoad",
+					event.layer.name,
+					ErrorMessageUtil.makeHTMLSafe(ErrorMessageUtil.buildFaultMessage(event.fault)));
+				
+				showError(errorMessage);
+			}
+			
+			
+			
+			private function queryFeatures_resultHandler(featureSet:FeatureSet, queryOptions:Object):void
+			{
+				searchCount++;
+				try
+				{
+					if (!queryOptions.supportsServerSideSorting && queryOptions.orderByFields)
+					{
+						FeatureSetUtil.sortFeaturesByFieldName(featureSet, queryOptions.orderByFields);
+					}
+					
+					var temRes:ArrayCollection = createSearchResults(featureSet, queryOptions.queryFields,searchCount);
+					if(searchResultAC){
+						searchResultAC.addAll(temRes);
+					}else{
+						
+						searchResultAC= new ArrayCollection();
+						
+						searchResultAC.addAll(temRes);
+					}
+					//addSharedData(widgetTitle, searchResultAC);
+					if (featureSet.features.length < 1)
+					{
+						//showMessage(noResultLabel, false);
+					}
+					else
+					{
+						//showMessage(selectionLabel + " " + featureSet.features.length, false);
+					}
+				}
+				catch (error:Error)
+				{
+					//showMessage(error.message, false);
+				}
+				
+				if (!resultFeatureLayer.map)
+				{
+					map.addLayer(resultFeatureLayer);
+				}
+				
+				if(searchCount<configSearchText.length)
+				{
+					searchByCustom(searchCount);
+				}
+				
+				if(gFeatureSet){
+					var tArr:Array = gFeatureSet.features.concat(featureSet.features);
+					gFeatureSet = new FeatureSet(tArr);
+				}else{
+					gFeatureSet=featureSet;
+				}
+				
+				if(searchCount == configSearchText.length){
+					
+					//添加标注
+					var layerDetails:LayerDetails = queryLayer.layerDetails;
+					var defaultSymbol:Symbol = querySymbol ? querySymbol : getMatchingDefaultSymbol(featureSet.geometryType);
+					//resultFeatureLayer.outFields = queryLayer.outFields;
+					resultFeatureLayer.visible = true;
+					resultFeatureLayer.featureCollection = new FeatureCollection(gFeatureSet, layerDetails);
+					resultFeatureLayer.name = queryLayer.name;
+					resultFeatureLayer.renderer = new SimpleRenderer(defaultSymbol);
+					
+					searchRes.dataProvider = searchResultAC;
+					searchRes.addEventListener("searchResultClick",clickSearchResult);
+					
+					//重新设置精确搜索为false
+					isSpecificSearch = false;
+					SearchText = null;
+				}
+				
+			}
+			
+			private var hitimer:uint;
+			private function clickSearchResult(event:Event):void
+			{
+				if (resultFeatureLayer.visible)
+				{
+					var searchResult:ResultItem = ItemRenderer(event.target).data as ResultItem;
+					if (searchResult.geometry)
+					{
+						if (searchResult.geometry.type == Geometry.MAPPOINT)
+						{
+							if (map.scale > zoomScale)
+							{
+								map.scale = zoomScale;
+							}
+						}
+						
+						map.zoomTo(searchResult.geometry);
+					}
+					clearTimeout(hitimer);
+					hitimer = setTimeout(showHighlight, 300, [ searchResult ]);
+				}
+			}
+			
+			private function showHighlight(params:Array):void
+			{
+				var searchResult:ResultItem = params[0];
+				var showHighlightPoint:MapPoint = searchResult.center as MapPoint;
+				var linkAlias:String = searchResult.attributes.linkAlias;
+				
+				if(this.userType !="1"){
+					popUpRenderer.popUpInfo = configurePopUpInfo(searchResult.attributes);
+					popUpRenderer.graphic = searchResult.graphic;
+					popUpRenderer.mousePoint = showHighlightPoint;
+					
+					map.infoWindow.content = popUpRenderer; 	
+					map.infoWindow.contentOwner = popUpRenderer.graphic;
+				}else{
+					editorPopUpRenderer.popUpInfo = configurePopUpInfo(searchResult.attributes);
+					editorPopUpRenderer.graphic = searchResult.graphic;
+					editorPopUpRenderer.mousePoint = showHighlightPoint;
+					editorPopUpRenderer.layerNum = searchResult.layerNum;
+					editorPopUpRenderer.map = map;
+					map.infoWindow.content = editorPopUpRenderer; 
+					map.infoWindow.contentOwner = editorPopUpRenderer.graphic;	
+				}
+				
+				
+				map.infoWindow.show(showHighlightPoint); 
+				
+			}
+			
+			private function queryFeatures_faultHandler(info:Object, queryOptions:Object):void
+			{
+				//showMessage(info.toString(), false);
+			}
+			private function widgetClosedHandler(event:Event):void
+			{
+				for each (var featureLayer:FeatureLayer in featureLayers)
+				{
+					featureLayer.clearSelection();
+				}
+			}
+			
+			private function createSearchResults(featureSet:FeatureSet, queryFields:XMLList, lyrC:uint):ArrayCollection
+			{
+				var result:ArrayCollection = new ArrayCollection();
+				
+				var layerDetails:LayerDetails = queryLayer.layerDetails;
+				if (!queryTitleField)
+				{
+					queryTitleField = featureSet.displayFieldName;
+				}
+				
+				var defaultSymbol:Symbol = querySymbol ? querySymbol : getMatchingDefaultSymbol(featureSet.geometryType);
+				var resultAttributes:ResultAttributes;
+				var infoWindowRenderer:ClassFactory;
+				
+				for each (var graphic:Graphic in featureSet.features)
+				{
+					graphic.symbol = defaultSymbol;
+					
+					resultAttributes =
+						ResultAttributes.toResultAttributes(queryFields, graphic, featureSet,
+							queryLayer, layerDetails, widgetTitle,
+							queryTitleField, queryLinkField, queryLinkAlias);
+					//在对搜索进行编辑中使用
+					result.addItem(new ResultItem(graphic, resultAttributes,lyrC));
+					
+					infoWindowRenderer = new ClassFactory(PopUpRenderer);
+					infoWindowRenderer.properties = { popUpInfo: configurePopUpInfo(resultAttributes)};
+				}
+				
+				return result;
+			}
+			
+			private function configurePopUpInfo(resultAttributes:ResultAttributes):PopUpInfo
+			{
+				var popUpInfo:PopUpInfo = new PopUpInfo;
+				
+				popUpInfo.title = resultAttributes.title;
+				popUpInfo.description = resultAttributes.content;
+				popUpInfo.showZoomToButton = false;
+				
+				
+				
+				var link:String = resultAttributes.link;
+				var linkAlias:String = resultAttributes.linkAlias
+				if (link)
+				{
+					var pos:Number = link.length - 4;
+					var sfx:String = link.substr(pos, 4).toLowerCase();
+					var isImageLink:Boolean = (sfx == ".jpg") || (sfx == ".png") || (sfx == ".gif");
+					
+					if (isImageLink)
+					{
+						var popUpMediaInfo:PopUpMediaInfo = new PopUpMediaInfo;
+						popUpMediaInfo.type = PopUpMediaInfo.IMAGE;
+						popUpMediaInfo.imageLinkURL = link;
+						popUpMediaInfo.imageSourceURL = link;
+						popUpInfo.popUpMediaInfos = [ popUpMediaInfo ];
+					}
+					else
+					{
+						var linkText:String = linkAlias ? linkAlias : link;
+						popUpInfo.description += "<br/><a href='" + link + "'>" + linkText + "</a>";
+					}
+				}
+				
+				return popUpInfo;
+			}
+			
+			private function getMatchingDefaultSymbol(geometryType:String):Symbol
+			{
+				var defaultSymbol:Symbol;
+				
+				switch (geometryType)
+				{
+					case Geometry.MAPPOINT:
+					{
+						defaultSymbol = resultMarkerSymbol;
+						break;
+					}
+					case Geometry.POLYLINE:
+					{
+						defaultSymbol = resultLineSymbol;
+						break;
+					}
+					case Geometry.POLYGON:
+					{
+						defaultSymbol = resultFillSymbol;
+						break;
+					}
+				}
+				
+				return defaultSymbol;
+			}
+			
+			private	function clone(source:Object):*
+			{
+				var myBA:ByteArray = new ByteArray();
+				myBA.writeObject(source);
+				myBA.position = 0;
+				return(myBA.readObject());
+			}
+			
+			private function getUserType():void
+			{
+				var queryStringFromUrl:String = ExternalInterface.call("window.location.search.substring", 1);
+				if (queryStringFromUrl)
+				{
+					var params:Array = queryStringFromUrl.split('&');
+					var length:uint = params.length;
+					
+					for (var i:uint = 0, index:int = -1; i < length; i++)
+					{
+						var kvPair:String = params[i];
+						if ((index = kvPair.indexOf("=")) > 0)
+						{
+							var key:String = kvPair.substring(0, index);
+							var value:String = kvPair.substring(index + 1);
+							if (key)
+							{
+								urlConfigParams[key] = decodeURIComponent(value);
+							}
+						}
+					}
+				}
+				var type:String = urlConfigParams["type"]; 
+				//Alert.show(type);
+				if(type == "1")
+				{
+					//为管理员	
+					this.userType = "1";
+				}else{
+					this.userType = "2";
+				}
+				
+			}
+		]]>
+	</fx:Script>
+	
+	<viewer:states>
+		<s:State name="SEARCH_STATE"/>
+		<s:State name="RESUALT_STATE"/>
+	</viewer:states>
+	
+	<s:BorderContainer id="lPnlWidget" width="210" height="100%" backgroundColor="#FFFFFF" borderColor="#dbdbdb">
+		<s:layout>
+			<s:VerticalLayout/>
+		</s:layout>
+		<s:BorderContainer width="100%" height="41" borderVisible="false" backgroundColor="#59aeec">
+			<s:Image width="207" height="41" source="assets/images/images/queryTitle.jpg"/>
+		</s:BorderContainer>
+		<!--条件搜索   Start-->
+		<s:BorderContainer width="100%" height="100%" borderVisible="false" includeIn="SEARCH_STATE" >
+			<s:layout>
+				<s:VerticalLayout gap="25" paddingLeft="10" paddingTop="25"/>
+			</s:layout>
+			<s:HGroup verticalAlign="middle">
+				<s:Label fontSize="12" text="所属社区:"/>
+				<s:DropDownList id="DDL_SSSQ" width="125" height="30" borderColor="#b2b2b2"
+								requireSelection="true" rollOverColor="#A6E0F6"
+								skinClass="widgets.Custom.DDLNoAnchorWidgetSkin">
+					<s:dataProvider>
+						<s:ArrayList source="[不限,北头,风华,荔芳,荔林,荔湾,南光,南山,南园,向南,学府,阳光,月亮湾,邓良]"/>
+					</s:dataProvider>
+				</s:DropDownList>
+			</s:HGroup>
+			<s:HGroup horizontalAlign="left" verticalAlign="middle">
+				<s:Label fontSize="12" text="企业名称:"/>
+				<s:TextInput id="TXT_QYMC" width="125" height="30" borderColor="#d2d2d2"
+							 borderVisible="true" text=""/>	
+			</s:HGroup>
+			<s:HGroup verticalAlign="middle">
+				<s:Label fontSize="12" text="行业类别:" textAlign="center" verticalAlign="middle"/>
+				<s:DropDownList id="DDL_HYLB" width="125" height="30" borderColor="#b2b2b2"
+								requireSelection="true" rollOverColor="#A6E0F6" skinClass="widgets.Custom.DDLNoAnchorWidgetSkin">
+					<s:dataProvider>
+						<s:ArrayList source="[不限,制造业,建筑业,批发和零售业,租凭和商务服务业,信息传输、计算机服务和软件业,文化、体育和娱乐业,水利、环境和公共设施管理业,科学研究、技术服务和地质勘查业,居民服务和其他服务业,交通运输、仓储和邮政业,其他]"/>
+					</s:dataProvider>
+				</s:DropDownList>
+			</s:HGroup>
+			<s:HGroup verticalAlign="middle">
+				<s:Label fontSize="12" text="经营范围:"/>
+				<s:TextInput id="TXT_JQFW" width="125" height="30" borderColor="#d2d2d2"
+							 borderVisible="true" text=""/>	
+			</s:HGroup>
+			<s:HGroup verticalAlign="middle">
+				<s:Label fontSize="12" text="安全等级:"/>
+				<s:DropDownList id="DDL_AQDJ" width="125" height="30" borderColor="#b2b2b2"
+								requireSelection="true" rollOverColor="#A6E0F6"
+								skinClass="widgets.Custom.DDLNoAnchorWidgetSkin">
+					<s:dataProvider>
+						<s:ArrayList source="[不限,一级,二级,三级,四级]"/>
+					</s:dataProvider>
+				</s:DropDownList>
+			</s:HGroup>
+			
+	<!--		<s:HGroup verticalAlign="middle">
+				<s:VGroup>
+					<s:Label fontSize="12" text="成立日期:"/>
+					<s:Label fontSize="12" text="向后搜索"/>	
+				</s:VGroup>
+				
+				<s:DropDownList id="DDL_CLRQEND" width="125" height="30" borderColor="#b2b2b2"
+								requireSelection="true" rollOverColor="#A6E0F6"
+								skinClass="widgets.Custom.DDLNoAnchorWidgetSkin" dataProvider="{SearchALlDate}">
+				</s:DropDownList>
+			</s:HGroup>-->
+			<s:HGroup verticalAlign="middle">
+				<s:Label fontSize="12" text="监管单位:"/>
+				<s:DropDownList id="DDL_JGDW" width="125" height="30" borderColor="#b2b2b2"
+								requireSelection="true" rollOverColor="#A6E0F6"
+								skinClass="widgets.Custom.DDLNoAnchorWidgetSkin">
+					<s:dataProvider>
+						<s:ArrayList source="[不限,社区,街道安监科,街道安监执法中队]"/>
+					</s:dataProvider>
+				</s:DropDownList>
+			</s:HGroup>
+			<s:HGroup verticalAlign="middle">
+				<s:Label fontSize="12" text="监 管 人:"/>
+				<s:TextInput id="DDL_JGR" width="125" height="30" borderColor="#d2d2d2"
+							 borderVisible="true" text=""/>	
+			</s:HGroup>
+			<s:BorderContainer width="100%" borderVisible="false">
+				<s:HGroup verticalAlign="middle">
+					<s:Image source="assets/images/images/searchBtnS.jpg"/>
+					<s:Image source="assets/images/images/searchBtnC.png"/>
+				</s:HGroup>
+				<!--搜索-->
+				<s:Label x="0" y="0" width="89" height="28" buttonMode="true" text="" click="goToSearchRes_clickHandler(event)"/>
+				<!--取消-->
+				<s:Label x="95" y="0" width="89" height="28" buttonMode="true" text="" click="clearSearchConditons_clickHandler(event)"/>
+			</s:BorderContainer>
+			
+		</s:BorderContainer>
+		<!--条件搜索   End-->
+		
+		<!--搜索结果   Start-->
+		<s:BorderContainer width="100%" height="100%" borderVisible="false" includeIn="RESUALT_STATE" itemCreationPolicy="immediate" creationPolicy="all">
+			<s:layout>
+				<s:VerticalLayout gap="15" paddingLeft="10"/>
+			</s:layout>
+			<!--显示结果-->
+			<s:BorderContainer width="100%" height="400" borderVisible="false" >
+				<s:Scroller width="100%" height="100%" >
+					<Search:SearchResultDataGroup id="searchRes" >
+						<Search:layout>
+							<s:VerticalLayout horizontalAlign="justify"/>
+						</Search:layout>
+					</Search:SearchResultDataGroup>
+				</s:Scroller>
+			</s:BorderContainer>
+			<s:BorderContainer width="100%" borderVisible="false">
+				<s:HGroup verticalAlign="middle">
+					<s:Image source="assets/images/images/searchBack.png"/>
+				</s:HGroup>
+				<!--返回搜索界面-->
+				<s:Label x="0" y="0" width="188" height="28" buttonMode="true" text="" click="backToSearch_clickHandler(event)"/>
+			</s:BorderContainer>
+		</s:BorderContainer>
+		<!--搜索结果   End-->
+	</s:BorderContainer>	
+</viewer:BaseWidget>

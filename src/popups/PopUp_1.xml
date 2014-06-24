@@ -1,0 +1,10 @@
+<?xml version="1.0" ?>
+<configuration>
+    <title>三小场所</title>
+    <fields>
+        <field name="名称" alias="名称:  "  visible="true"/>
+    </fields>
+    <showattachments>false</showattachments>
+    <showrelatedrecords>false</showrelatedrecords>
+    <showzoomtobutton>false</showzoomtobutton>
+</configuration>

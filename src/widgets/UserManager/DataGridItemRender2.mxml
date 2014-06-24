@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:GridItemRenderer xmlns:fx="http://ns.adobe.com/mxml/2009" 
+					xmlns:s="library://ns.adobe.com/flex/spark" 
+					xmlns:mx="library://ns.adobe.com/flex/mx" clipAndEnableScrolling="true" >
+	
+	<s:Label id="labelDisplay" left="0" right="0" height="35" fontSize="14" maxDisplayedLines="1"
+			 paddingBottom="3" paddingLeft="3" paddingRight="3" paddingTop="3"
+			 showTruncationTip="true" textAlign="center" verticalAlign="middle" verticalCenter="1"/>
+	
+</s:GridItemRenderer>

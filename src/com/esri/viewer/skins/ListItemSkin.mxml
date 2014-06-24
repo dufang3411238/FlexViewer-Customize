@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:ItemRenderer xmlns:fx="http://ns.adobe.com/mxml/2009" 
+				xmlns:s="library://ns.adobe.com/flex/spark" 
+				xmlns:mx="library://ns.adobe.com/flex/mx" width="100%" height="100%">
+	<fx:Declarations>
+		<!-- 将非可视元素（例如服务、值对象）放在此处 -->
+	</fx:Declarations>
+
+	<s:states> 
+		<s:State name="normal"/> 
+		<s:State name="hovered"/> 
+	</s:states> 
+	<s:Rect id="border" left="0" right="0" top="0" bottom="0" width="100%" height="40">
+		<s:stroke>
+			<s:SolidColorStroke weight="1" color="#d2d2d2"/>
+		</s:stroke>
+	</s:Rect>
+	<s:Label id="labelDisplay" left="3" right="3" top="6" bottom="4" verticalCenter="0"
+			 textAlign="center" verticalAlign="middle"/> 
+</s:ItemRenderer>

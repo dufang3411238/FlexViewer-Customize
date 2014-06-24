@@ -1,0 +1,38 @@
+<?xml version="1.0" ?>
+<configuration>
+    <title>南山街道办安全监管系统</title>
+    <logo>assets/images/logo.png</logo>
+    <style>
+        <colors>0xffffff,0x333333,0x101010,0x0,0xffd700</colors>
+        <alpha>1</alpha>
+        <font size="14"/>
+        <titlefont name="微软雅黑"/>
+        <subtitlefont name="Verdana"/>
+    </style>
+    <!-- replace the following url with your own geometryservice -->
+    <geometryservice url="https://utility.arcgisonline.com/arcgis/rest/services/Geometry/GeometryServer"/>
+    <widget url="widgets/Navigation/NavigationWidget.swf" config="widgets/Navigation/NavigationWidget.xml" left="10" top="50"/>
+    <widget url="widgets/OverviewMap/OverviewMapWidget.swf" config="widgets/OverviewMap/OverviewMapWidget.xml" right="0" bottom="0"/>
+    <widget url="widgets/MapSwitcher/MapSwitcherWidget.swf" config="widgets/MapSwitcher/MapSwitcherWidget.xml" right="20" top="55"/>
+    <widget url="widgets/HeaderController/HeaderControllerWidget.swf" config="widgets/HeaderController/HeaderControllerWidget.xml" left="0" top="0"/>
+    <widget url="widgets/Navigation/NavigationWidget.swf" config="widgets/Navigation/NavigationWidget.xml" left="10" top="50"/>
+    <widget url="widgets/Coordinate/CoordinateWidget.swf" config="widgets/Coordinate/CoordinateWidget.xml" label="坐标" left="3" bottom="1"/>
+    <map attributionvisible="false" esrilogovisible="true" openhandcursorvisible="false" scalebarvisible="true" scalebar="default" zoomslidervisible="false" wraparound180="true" addarcgisbasemaps="false" initialextent="12417093.884158604 2703832.0058453237 12433126.550841399 2712775.1381546776" wkid="102100" top="40" portalurl="https://www.arcgis.com/">
+        <basemaps>
+            <layer type="tiled" label="03.中国地图（含POI）" icon="https://www.arcgis.com/sharing/rest/content/items/23fe7e8317ba4331b6ca72bf2a8eddb6/info/thumbnail/_E5_BE_AE_E5_8D_9A_E6_A1_8C_E9_9D_A2_E6_88_AA_E5_9B_BE_20130828171658.jpg" url="http://www.arcgisonline.cn/ArcGIS/rest/services/ChinaOnlineCommunity/MapServer" visible="true"/>
+        </basemaps>
+        <operationallayers>
+            <layer type="feature" label="公共聚集场所" url="http://113.108.119.116:6080/arcgis/rest/services/NanShanMercatorNew/FeatureServer/1" mode="onDemand" visible="true"/>
+            <layer type="feature" label="三小场所" url="http://113.108.119.116:6080/arcgis/rest/services/NanShanMercatorNew/FeatureServer/0" mode="onDemand" visible="true"/>
+            <layer type="feature" label="工矿商贸企业" url="http://113.108.119.116:6080/arcgis/rest/services/NanShanMercatorNew/FeatureServer/2" mode="onDemand" visible="true"/>
+        </operationallayers>
+    </map>
+    <widgetcontainer layout="float">
+        <widget url="widgets/LayerList/LayerListWidget.swf" config="widgets/LayerList/LayerListWidget_1.xml" label="图层列表" icon="assets/images/i_layers.png"/>
+        <widget url="widgets/Legend/LegendWidget.swf" config="widgets/Legend/LegendWidget_1.xml" label="图例" icon="assets/images/Legend32.png"/>
+        <widget url="widgets/Search/SearchWidget.swf" config="widgets/Search/SearchWidget_1.xml" label="搜索" icon="assets/images/i_search.png"/>
+    </widgetcontainer>
+    <widgetcontainer paneltype="bottom" initialstate="open">
+        <widget url="widgets/AttributeTable/AttributeTableWidget.swf" config="widgets/AttributeTable/AttributeTableWidget.xml" label="属性表" icon="assets/images/TableOpen32.png"/>
+    </widgetcontainer>
+</configuration>

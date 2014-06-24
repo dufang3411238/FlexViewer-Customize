@@ -1,0 +1,509 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Group xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		 xmlns:s="library://ns.adobe.com/flex/spark" 
+		 xmlns:mx="library://ns.adobe.com/flex/mx"
+		 implements="com.esri.ags.components.supportClasses.IGraphicRenderer"
+		  creationComplete="group1_creationCompleteHandler(event)" xmlns:esri="http://www.esri.com/2008/ags">
+	
+	
+	<fx:Declarations>
+		<!-- 将非可视元素（例如服务、值对象）放在此处 -->
+		<esri:Query id="queryMapClick"/>
+		<esri:CreateOptions id="createOptions"/>
+	</fx:Declarations>
+	<s:states>
+		<s:State name="LabelShow"/>
+		<s:State name="GridShow"/>
+	</s:states>
+	<fx:Script>
+		<![CDATA[
+			import com.esri.ags.Graphic;
+			import com.esri.ags.Map;
+			import com.esri.ags.components.ContentNavigator;
+			import com.esri.ags.components.supportClasses.IGraphicRenderer;
+			import com.esri.ags.events.AttributeInspectorEvent;
+			import com.esri.ags.geometry.MapPoint;
+			import com.esri.ags.layers.FeatureLayer;
+			import com.esri.ags.layers.GraphicsLayer;
+			import com.esri.ags.layers.supportClasses.CodedValue;
+			import com.esri.ags.layers.supportClasses.CodedValueDomain;
+			import com.esri.ags.layers.supportClasses.FeatureEditResult;
+			import com.esri.ags.layers.supportClasses.FeatureEditResults;
+			import com.esri.ags.layers.supportClasses.FeatureType;
+			import com.esri.ags.layers.supportClasses.Field;
+			import com.esri.ags.layers.supportClasses.IDomain;
+			import com.esri.ags.layers.supportClasses.LayerDetails;
+			import com.esri.ags.portal.supportClasses.PopUpFieldFormat;
+			import com.esri.ags.portal.supportClasses.PopUpFieldInfo;
+			import com.esri.ags.portal.supportClasses.PopUpInfo;
+			import com.esri.ags.portal.supportClasses.PopUpMediaInfo;
+			import com.esri.ags.utils.ESRIMessageCodes;
+			import com.esri.ags.utils.StringUtil;
+			
+			import flash.events.Event;
+			
+			import mx.collections.ArrayCollection;
+			import mx.controls.Alert;
+			import mx.core.UIComponent;
+			import mx.events.FlexEvent;
+			import mx.formatters.DateFormatter;
+			import mx.formatters.NumberBaseRoundType;
+			import mx.formatters.NumberFormatter;
+			import mx.rpc.AsyncResponder;
+			import mx.rpc.Fault;
+			import mx.rpc.events.FaultEvent;
+			import mx.utils.ObjectUtil;
+			import mx.utils.StringUtil;
+			
+			import spark.components.List;
+			import spark.components.supportClasses.SkinnableComponent;
+			import spark.events.IndexChangeEvent;
+			private const _dateFormatter:DateFormatter = new DateFormatter();
+			
+			private const _numberFormatter:NumberFormatter = new NumberFormatter();
+			
+			private var _formattedAttributes:Object;
+			
+			private var activeFeatureChangedAttributes:Array = [];
+			[Bindable]
+			private var DGArray:ArrayCollection = new ArrayCollection(); ;
+			[Bindable]
+			private var itemArray:ArrayCollection;
+			
+			[Bindable]
+			private var title:String;
+			
+			/*
+			1 三小场所
+			2 工业企业
+			3 公众聚集
+			*/
+			private var _layerNum:uint;
+			public function get layerNum():uint{
+				return _layerNum;
+			}
+			
+			public function set layerNum(value:uint):void{
+				_layerNum = value;
+			}
+			public function get formattedAttributes() : Object {
+				return this._formattedAttributes ;
+			}
+			
+			public function get featureLayer() : FeatureLayer {
+				return this.graphic?this.graphic.graphicsLayer as FeatureLayer:null;
+			}
+			
+			private var _graphic:Graphic;
+			
+			private var _graphicChanged:Boolean;
+			
+			private var isInit:Boolean = false;
+			public function get graphic() : Graphic {
+				return this._graphic;
+			}
+			
+			public function set graphic(value:Graphic) : void {
+				this._graphic = value;
+				this._graphicChanged = true;
+
+				invalidateProperties();
+				dispatchEvent(new Event("graphicChange"));
+			}
+			
+			private var _map:Map;
+			public function get map() : Map {
+				var result:Map = null;
+				var graphicsLayer:GraphicsLayer = null;
+				var graphic:Graphic = this.graphic;
+				if(graphic)
+				{
+					graphicsLayer = graphic.graphicsLayer;
+					if(graphicsLayer)
+					{
+						result = graphicsLayer.map;
+					}
+				}
+				return _map;
+			}
+			
+			public function set map(val:Map):void{
+				_map = val;
+			}
+			
+			
+			
+			private var _popUpInfo:PopUpInfo;
+			
+			public function get popUpInfo() : PopUpInfo {
+				return this._popUpInfo;
+			}
+			
+			public function set popUpInfo(value:PopUpInfo) : void {
+				this._popUpInfo = value;
+				dispatchEvent(new Event("popUpInfoChange"));
+			}
+			
+			private var _validPopUpMediaInfos:Array;
+			
+			public function get validPopUpMediaInfos() : Array {
+				return this._validPopUpMediaInfos;
+			}
+			
+			
+			private var _mousePoint:MapPoint;
+			public function set mousePoint(value:MapPoint):void{
+				this._mousePoint = value;
+			}
+			public function get mousePoint():MapPoint{
+				return this._mousePoint;
+			}
+			override protected function commitProperties() : void {
+				var attributes:Object = null;
+				var formatted:Object = null;
+				var layer:FeatureLayer = null;
+				var layerDetails:LayerDetails = null;
+				var fieldInfos:Array = null;
+				var mediaInfos:Array = null;
+				var fieldName:String = null;
+				var fieldValue:Object = null;
+				var fieldInfo:PopUpFieldInfo = null;
+				var validMediaInfos:Array = null;
+				var mediaInfo:PopUpMediaInfo = null;
+				var typeIdField:String = null;
+				var typeId:String = null;
+				var domainName:String = null;
+				var typeName:String = null;
+				var url:String = null;
+				var chartField:String = null;
+				
+				if(this._graphicChanged)
+				{
+					this._graphicChanged = false;
+					
+					attributes = this.graphic.attributes;
+					formatted = attributes?ObjectUtil.copy(attributes):{};
+					layer = this.featureLayer;
+					layerDetails = layer?layer.layerDetails:null;
+					//fieldInfos = this.popUpInfo;
+					title = popUpInfo.title;
+					if(mx.utils.StringUtil.trim(popUpInfo.description)!=""){
+						fieldInfos = mx.utils.StringUtil.trim(popUpInfo.description).split("\n");
+						dd.addEventListener(MouseEvent.CLICK,label1_clickHandler);	
+						
+						queryMapClick.where="企业名称  = '"+title+"'";
+						if(this.layerNum==2){
+							flGK = map.layers[7] as FeatureLayer;
+						}else if(layerNum==1){
+							flGK = map.layers[6] as FeatureLayer;
+						}
+						flGK.outFields=["*"];
+						flGK.selectFeatures(queryMapClick);
+					}else{
+						dd.removeEventListener(MouseEvent.CLICK,label1_clickHandler);	
+						dd.addEventListener(MouseEvent.CLICK,label1_NullclickHandler);	
+					}
+					this.currentState="LabelShow";
+				
+					
+					
+					
+					
+				}
+			}
+			
+			private function formatValue(fieldValue:Object, fieldInfo:PopUpFieldInfo, layerDetails:LayerDetails) : Object {
+				var field:Field = null;
+				var f:Field = null;
+				var date:Date = null;
+				var dateFormat:String = null;
+				var formatString:String = null;
+				if((fieldValue == null) || (!fieldInfo) || (!fieldInfo.format))
+				{
+					return fieldValue;
+				}
+				var result:Object = fieldValue;
+				var fieldName:String = fieldInfo.fieldName;
+				var format:PopUpFieldFormat = fieldInfo.format;
+				var fields:Array = layerDetails?layerDetails.fields:null;
+				for each(f in fields)
+				{
+					if(fieldName === f.name)
+					{
+						field = f;
+						break;
+					}
+				}
+				if(field)
+				{
+					if(!fieldInfo.label)
+					{
+						fieldInfo.label = field.alias;
+					}
+					if((field.type === Field.TYPE_DATE) && (fieldValue is Number))
+					{
+						date = new Date(fieldValue);
+						if(date.milliseconds === 999)
+						{
+							date.milliseconds++;
+						}
+						if(format.useUTC)
+						{
+							date.minutes = date.minutes + date.timezoneOffset;
+						}
+						fieldValue = date;
+					}
+				}
+				if(fieldValue is Number)
+				{
+					if(format.precision < 0)
+					{
+						this._numberFormatter.rounding = NumberBaseRoundType.NONE;
+					}
+					else
+					{
+						this._numberFormatter.rounding = NumberBaseRoundType.NEAREST;
+					}
+					this._numberFormatter.precision = format.precision;
+					this._numberFormatter.useThousandsSeparator = format.useThousandsSeparator;
+					result = this._numberFormatter.format(fieldValue);
+				}
+				else if(fieldValue is Date)
+				{
+					dateFormat = format.dateFormat?format.dateFormat:PopUpFieldFormat.SHORT_DATE_SHORT_TIME;
+					formatString = resourceManager.getString(ESRIMessageCodes.ESRI_MESSAGES,"popUpFormat_" + dateFormat);
+					if(formatString)
+					{
+						this._dateFormatter.formatString = formatString;
+					}
+					else
+					{
+						this._dateFormatter.formatString = dateFormat;
+					}
+					result = this._dateFormatter.format(fieldValue);
+					if(!result)
+					{
+						result = this._dateFormatter.error + " (" + this._dateFormatter.formatString + ")";
+					}
+				}
+				
+				return result;
+			}
+			
+			private function getDomainName(fieldName:String, fieldValue:Object, typeId:String, layerDetails:LayerDetails) : String {
+				var result:String = null;
+				var domain:IDomain = null;
+				var typeFound:* = false;
+				var type:FeatureType = null;
+				var fields:Array = null;
+				var field:Field = null;
+				var codedValues:Array = null;
+				var codedValue:CodedValue = null;
+				var types:Array = layerDetails.types;
+				if((types) && (typeId))
+				{
+					for each(type in types)
+					{
+						if(typeId === type.id)
+						{
+							typeFound = true;
+							domain = type.domains?type.domains[fieldName]:null;
+							break;
+						}
+					}
+				}
+				if((!domain) && (!typeFound))
+				{
+					fields = layerDetails.fields;
+					for each(field in fields)
+					{
+						if(fieldName === field.name)
+						{
+							domain = field.domain;
+							break;
+						}
+					}
+				}
+				if(domain is CodedValueDomain)
+				{
+					codedValues = CodedValueDomain(domain).codedValues;
+					for each(codedValue in codedValues)
+					{
+						if(fieldValue == codedValue.code)
+						{
+							result = codedValue.name;
+							break;
+						}
+					}
+				}
+				return result;
+			}
+			
+			private function getTypeName(typeId:String, layerDetails:LayerDetails) : String {
+				var result:String = null;
+				var type:FeatureType = null;
+				var types:Array = layerDetails.types;
+				if(types)
+				{
+					for each(type in types)
+					{
+						if(typeId === type.id)
+						{
+							result = type.name;
+							break;
+						}
+					}
+				}
+				return result;
+			}
+			
+			
+
+			
+			protected function label1_creationCompleteHandler(event:FlexEvent):void
+			{
+				this.currentState = "LabelShow";
+				
+			}
+			
+			protected function label1_clickHandler(event:MouseEvent):void
+			{
+				
+				//map.dispatchEvent(new MouseEvent(MouseEvent.MOUSE_UP,true,false,_mousePoint.x,_mousePoint.y));
+				this.currentState = "GridShow";
+			}
+			
+			protected function label1_NullclickHandler(event:MouseEvent):void
+			{
+			
+			}
+			
+			protected function attrInsp_updateFeatureHandler(event:AttributeInspectorEvent):void
+			{
+				activeFeatureChangedAttributes.push({ field: event.field, oldValue: event.oldValue, newValue: event.newValue });
+				
+			}
+			
+			protected function attrInsp_deleteFeatureHandler(event:AttributeInspectorEvent):void
+			{
+				map.infoWindow.hide();
+				
+				const deletes:Array = [ event.feature ];
+				event.featureLayer.applyEdits(null, null, deletes, false,
+					new AsyncResponder(featureLayer_editsCompleteHandler, featureLayer_faultHandler));
+				
+			}
+			
+			protected function attrInsp_saveFeatureHandler(event:AttributeInspectorEvent):void
+			{
+				if (!attrInsp.isValid)
+				{
+					return;
+				}
+				// save the changes when 'Ok' button is clicked
+				if (activeFeatureChangedAttributes.length)
+				{
+					saveUnsavedAttributes(attrInsp.activeFeature, attrInsp.activeFeatureLayer);
+				}
+				map.infoWindow.hide();
+				
+			}
+			
+			private function saveUnsavedAttributes(feature:Graphic, featureLayer:FeatureLayer):void
+			{
+				const attributes:Object = {};
+				const objectIdField:String = featureLayer.layerDetails.objectIdField;
+				attributes[objectIdField] = feature.attributes[objectIdField];
+				for each (var attributeObject:Object in activeFeatureChangedAttributes)
+				{
+					attributes[attributeObject.field.name] = attributeObject.newValue;
+					feature.attributes[attributeObject.field.name] = attributeObject.newValue;
+				}
+				
+				const feature1:Graphic = new Graphic(null, null, attributes);
+				const updates:Array = [ feature1 ];
+				
+				featureLayer.applyEdits(null, updates, null, false,
+					new AsyncResponder(featureLayer_editsCompleteHandler, featureLayer_faultHandler, { feature: feature }));
+			}
+			
+			private function featureLayer_faultHandler(fault:Fault, token:Object = null):void
+			{
+				activeFeatureChangedAttributes = [];
+				Alert.show(fault.faultString, "Fault");
+			}
+			
+			private function featureLayer_editsCompleteHandler(featureEditResults:FeatureEditResults, token:Object = null):void
+			{
+				var doRefresh:Boolean = false;
+				for each (var deleteResult:FeatureEditResult in featureEditResults.deleteResults)
+				{
+					if (deleteResult.success === false)
+					{
+						Alert.show("Could not delete feature");
+					}
+					else
+					{
+						doRefresh = true;
+					}
+				}
+				
+				for each (var updateResult:FeatureEditResult in featureEditResults.updateResults)
+				{
+					const feature:Graphic = token.feature;
+					if (updateResult.success === false)
+					{
+						Alert.show("Could not update feature, Restoring old value", "Error");
+						
+						const field:Field = token.field;
+						feature.attributes[field.name] = token.oldValue;
+						if (attrInsp.activeFeature === feature)
+						{
+							attrInsp.refreshActiveFeature();
+						}
+					}
+					else
+					{
+						doRefresh = true;
+						
+						//refresh the feature to see the changes client side  itemCreationPolicy="immediate" includeIn="GridShow"
+						feature.refresh();
+					}
+				}
+				
+				activeFeatureChangedAttributes = [];
+			}
+			
+			[Bindable]
+			private var flGK:FeatureLayer;
+			[Bindable]
+			private var flGZ:FeatureLayer;
+			
+			protected function group1_creationCompleteHandler(event:FlexEvent):void
+			{
+				this.currentState = "LabelShow";
+				//Alert.show(dd.text);
+				widgets.Edit.EditWidgetAttributeInspectorSkin.showAttachmentsText = "附件";
+				widgets.Edit.EditWidgetAttributeInspectorSkin.showRelatedRecordsText = "相关记录";
+				widgets.Edit.EditWidgetAttributeInspectorSkin.deleteLabel = "删除";
+				widgets.Edit.EditWidgetAttributeInspectorSkin.saveLabel = "确定";
+				
+				
+		
+			}
+			
+		]]>
+	</fx:Script>
+		<s:Label id="dd" width="300" height="50" text="{title}" verticalCenter="5" left="20" 
+				 fontWeight="bold" creationComplete="label1_creationCompleteHandler(event)"  buttonMode="true" useHandCursor="true"/>
+		<s:BorderContainer width="350" height="400" borderVisible="false" itemCreationPolicy="immediate" includeIn="GridShow" backgroundAlpha="0">
+			<esri:AttributeInspector id="attrInsp" featureLayers="{[flGK]}"
+									 left="0" right="0" top="0" bottom="0"
+									 updateFeature="attrInsp_updateFeatureHandler(event)"
+									 deleteFeature="attrInsp_deleteFeatureHandler(event)"
+									 saveFeature="attrInsp_saveFeatureHandler(event)"
+									 skinClass="widgets.Edit.EditWidgetAttributeInspectorSkin">
+			</esri:AttributeInspector>
+		</s:BorderContainer>
+	
+</s:Group>

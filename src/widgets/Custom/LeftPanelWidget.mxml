@@ -1,0 +1,1592 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+///////////////////////////////////////////////////////////////////////////
+// Copyright (c) 2010-2011 Esri. All Rights Reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+///////////////////////////////////////////////////////////////////////////
+-->
+<viewer:BaseWidget xmlns:fx="http://ns.adobe.com/mxml/2009"
+				   xmlns:s="library://ns.adobe.com/flex/spark"
+				   xmlns:mx="library://ns.adobe.com/flex/mx"
+				   xmlns:viewer="com.esri.viewer.*"
+				   width="100%" height="100%" layout="absolute" widgetConfigLoaded="init()">
+	<viewer:states>
+		<s:State name="all"/>
+		<s:State name="admin"/>
+	</viewer:states>
+	<fx:Style>
+		@namespace esri "http://www.esri.com/2008/ags";
+		@namespace s "library://ns.adobe.com/flex/spark";
+		
+		esri|AttachmentInspector
+		{
+			skinClass: ClassReference("widgets.AttributeTable.AttributeTableWidgetAttachmentInspectorSkin");
+		}
+		
+		#classTable s|Label
+		{
+			fontFamily:"微软雅黑,宋体";
+			fontWeight:bold;
+			color:#676767;
+			
+		}
+	</fx:Style>
+
+    <fx:Script>
+        <![CDATA[
+			import com.esri.ags.FeatureSet;
+			import com.esri.ags.Graphic;
+			import com.esri.ags.Map;
+			import com.esri.ags.clusterers.IClusterer;
+			import com.esri.ags.components.AttributeTable;
+			import com.esri.ags.components.supportClasses.FieldInspector;
+			import com.esri.ags.events.LayerEvent;
+			import com.esri.ags.events.MapEvent;
+			import com.esri.ags.geometry.Geometry;
+			import com.esri.ags.geometry.MapPoint;
+			import com.esri.ags.layers.ArcGISDynamicMapServiceLayer;
+			import com.esri.ags.layers.ArcIMSMapServiceLayer;
+			import com.esri.ags.layers.DynamicMapServiceLayer;
+			import com.esri.ags.layers.FeatureLayer;
+			import com.esri.ags.layers.Layer;
+			import com.esri.ags.layers.supportClasses.FeatureCollection;
+			import com.esri.ags.layers.supportClasses.Field;
+			import com.esri.ags.layers.supportClasses.LayerDetails;
+			import com.esri.ags.layers.supportClasses.LayerInfo;
+			import com.esri.ags.portal.PopUpRenderer;
+			import com.esri.ags.portal.supportClasses.PopUpInfo;
+			import com.esri.ags.portal.supportClasses.PopUpMediaInfo;
+			import com.esri.ags.renderers.SimpleRenderer;
+			import com.esri.ags.skins.fieldClasses.CalendarField;
+			import com.esri.ags.symbols.PictureMarkerSymbol;
+			import com.esri.ags.symbols.SimpleFillSymbol;
+			import com.esri.ags.symbols.SimpleLineSymbol;
+			import com.esri.ags.symbols.SimpleMarkerSymbol;
+			import com.esri.ags.symbols.Symbol;
+			import com.esri.ags.tasks.supportClasses.Query;
+			import com.esri.viewer.IBaseWidget;
+			import com.esri.viewer.ViewerContainer;
+			import com.esri.viewer.components.FocusableImage;
+			import com.esri.viewer.components.SearchEditorPopUpRenderer;
+			import com.esri.viewer.components.SearchPopUpRenderer;
+			import com.esri.viewer.utils.ClustererParser;
+			import com.esri.viewer.utils.ErrorMessageUtil;
+			import com.esri.viewer.utils.LabelUtil;
+			import com.esri.viewer.utils.SymbolParser;
+			
+			import flash.utils.setInterval;
+			
+			import mx.binding.utils.ChangeWatcher;
+			import mx.collections.ArrayCollection;
+			import mx.collections.ArrayList;
+			import mx.containers.ViewStack;
+			import mx.controls.Alert;
+			import mx.core.LayoutDirection;
+			import mx.events.CloseEvent;
+			import mx.events.FlexEvent;
+			import mx.events.ResizeEvent;
+			import mx.managers.PopUpManager;
+			import mx.rpc.AsyncResponder;
+			import mx.rpc.events.FaultEvent;
+			import mx.utils.ObjectUtil;
+			import mx.utils.StringUtil;
+			
+			import spark.components.NavigatorContent;
+			import spark.components.Scroller;
+			import spark.components.TitleWindow;
+			import spark.components.supportClasses.ItemRenderer;
+			
+			import widgets.AttributeTable.AttributeTableWidget;
+			import widgets.Custom.UserManager;
+			import widgets.Search.SearchResultDataGroup;
+			import widgets.supportClasses.FeatureSetUtil;
+			import widgets.supportClasses.ResultAttributes;
+			import widgets.supportClasses.ResultItem;
+			
+			private var isIndustryVisible:Boolean = true;
+			private var isEnterpriseVisible:Boolean = true;
+			private var isSmallShopVisible:Boolean = true;
+			private var isDistrictVisible:Boolean = true;
+			private var industryName:String;
+			private var enterpriseName:String;
+			private var smallShopName:String;
+			private var districtProspective:String;
+			private var attrTab:ViewStack;
+			
+			[Bindable]
+			private var featureLayers:Array;
+			private var arrFinalLayers:Array;
+			private var mapLayers:ArrayCollection;
+			private var excludeLayers:Array;
+			private var layersUsedInAttributeTable:Array = [];
+			
+			private var visibleLayersChangeWatcher:ChangeWatcher;
+			
+			private var featureLayerToNavigatorContent:Dictionary = new Dictionary;
+			private var featureLayerToAttributeTable:Dictionary = new Dictionary;
+			private var featureLayerToDynamicMapService:Dictionary = new Dictionary;
+			private var featureLayerToSettings:Dictionary = new Dictionary;
+			private var hiddenFeatureLayerToSettingsName:Dictionary = new Dictionary;
+			private var defaultExportLocation:String;
+			public var viewStack:ViewStack;
+			public var twTab:TitleWindow;
+			
+			private var configSearchGraphical:Array;
+			private var configSearchText:Array;
+			private var finishDrawing:Boolean;
+			private var graphicalsearchLabel:String;
+			private var loadingLabel:String;
+			private var nolayerLabel:String;
+			private var queryLayer:FeatureLayer;
+			private var queryGeom:Geometry;
+			private var queryExpr:String;
+			private var queryFields:XMLList;
+			private var queryTitleField:String;
+			private var queryLinkField:String;
+			private var queryLinkAlias:String;
+			private var querySymbol:Symbol;
+			private var resultsLabel:String;
+			private var selectionLabel:String;
+			private var selectedDrawingIcon:FocusableImage;
+			private var textsearchLabel:String;
+			private var zoomScale:Number = 50000;
+			private var pointSearchTolerance:Number = 6;
+			
+			private var resultFeatureLayer:FeatureLayer;
+			private var popUpRenderer:SearchPopUpRenderer = new SearchPopUpRenderer();
+			private var editorPopUpRenderer:SearchEditorPopUpRenderer = new SearchEditorPopUpRenderer();
+			
+			[Bindable]
+			private var searchResultAC:ArrayCollection;
+			
+			private var resultMarkerSymbol:Symbol;
+			private var resultLineSymbol:Symbol;
+			private var resultFillSymbol:Symbol;
+			private var shareResults:Boolean;
+			
+			private var searchRes:SearchResultDataGroup;
+			private var scallbar:Scroller;
+			private var userMg:UserManager;
+			
+			private var searchCount:uint = 0;
+			
+			public static var urlConfigParams:Object = {};
+			private var tempMouseEvent:MouseEvent;
+			private function getUserType():void
+			{
+				var queryStringFromUrl:String = ExternalInterface.call("window.location.search.substring", 1);
+				if (queryStringFromUrl)
+				{
+					var params:Array = queryStringFromUrl.split('&');
+					var length:uint = params.length;
+					
+					for (var i:uint = 0, index:int = -1; i < length; i++)
+					{
+						var kvPair:String = params[i];
+						if ((index = kvPair.indexOf("=")) > 0)
+						{
+							var key:String = kvPair.substring(0, index);
+							var value:String = kvPair.substring(index + 1);
+							if (key)
+							{
+								urlConfigParams[key] = decodeURIComponent(value);
+							}
+						}
+					}
+				}
+				var type:String = urlConfigParams["type"]; 
+				//Alert.show(type);
+				if(type == "1")
+				{
+					//为管理员	
+					this.currentState = "admin";
+				}
+				
+			}
+            private function init():void
+            {
+				viewStack = new ViewStack();
+				twTab = new TitleWindow();
+				
+				
+				searchRes = new SearchResultDataGroup();
+				scallbar = new Scroller();
+				userMg = new UserManager();
+				
+				twTab.x=199;
+				twTab.y=104;
+				
+				
+				twTab.width = 1000;
+				twTab.height = 600;
+				
+				viewStack.percentWidth=100;
+				viewStack.percentHeight=100;
+				
+				scallbar.percentHeight=100;
+				scallbar.percentWidth=100;
+				
+				getUserType();
+				
+                if (configXML) // checking for valid content in the configuration file
+                {
+					industryName = configXML.industry;
+					enterpriseName=configXML.enterprise;
+					smallShopName=configXML.smallshop;
+					districtProspective=configXML.districtprospective;
+					
+					shareResults = true;
+					
+					var symbolParser:SymbolParser = new SymbolParser();
+					
+					configSearchGraphical = [];
+					configSearchText = [];
+					var lyrList:XMLList = configXML..layer;
+					for (var i:int = 0; i < lyrList.length(); i++)
+					{
+						var lyrURL:String = lyrList[i].url;
+						var lyrLabel:String = lyrList[i].name;
+						var lyrExpr:String = lyrList[i].expression;
+						var lyrFields:XMLList = lyrList[i].fields;
+						var lyrTitleField:String = lyrList[i].titlefield;
+						var lyrLinkField:String = lyrList[i].linkfield;
+						var lyrSymbol:Symbol = symbolParser.parseSymbol(lyrList[i].symbol[0]);
+						var linkAlias:String = lyrList[i].linkfield.@alias[0];
+						var useAMF:String = lyrList[i].useamf;
+						var useProxy:Boolean = lyrList[i].useproxy[0] && lyrList[i].useproxy == "true";
+						
+						const orderByFieldsText:String = lyrList[i].orderbyfields[0];
+						var lyrOrderByFields:Array;
+						if (orderByFieldsText)
+						{
+							lyrOrderByFields = orderByFieldsText.split(',');
+						}
+						
+						var layer:FeatureLayer = new FeatureLayer();
+						layer.addEventListener(LayerEvent.LOAD, searchLayer_loadHandler);
+						layer.addEventListener(LayerEvent.LOAD_ERROR, searchLayer_faultHandler);
+						layer.url = lyrURL;
+						layer.name = buildLayerName(lyrLabel);
+						
+						if (useProxy && configData.proxyUrl)
+						{
+							layer.proxyURL = configData.proxyUrl;
+						}
+						if (useAMF)
+						{
+							layer.useAMF = useAMF == "true";
+						}
+						if (lyrFields && lyrFields[0].@all[0] == "true")
+						{
+							layer.outFields = [ "*" ];
+						}
+						else if (lyrFields)
+						{
+							var fields:XMLList = lyrFields.field;
+							layer.outFields = [];
+							for each (var fieldXML:XML in fields)
+							{
+								if (fieldXML.@name[0])
+								{
+									layer.outFields.push(fieldXML.@name[0]);
+								}
+							}
+						}
+						
+						var searchLayer:Object =
+							{
+								layer: layer,
+								label: lyrLabel,
+								expr: lyrExpr,
+								fields: lyrFields,
+								orderbyfields: lyrOrderByFields,
+								titlefield: lyrTitleField,
+								linkfield: lyrLinkField,
+								linkalias: linkAlias,
+								symbol: lyrSymbol
+							};
+						configSearchGraphical.push(searchLayer);
+						if (lyrExpr)
+						{
+							configSearchText.push(searchLayer);
+						}
+					}
+					
+					const resultMarkerSymbolURL:String = configXML.symbols.picturemarkersymbol.@url || widgetIcon;
+					const parsedResultMarkerSymbolHeight:Number = parseFloat(configXML.symbols.picturemarkersymbol.@height[0]);
+					const resultMarkerSymbolHeight:Number = isNaN(parsedResultMarkerSymbolHeight) ? 0 : parsedResultMarkerSymbolHeight;
+					const parsedResultMarkerSymbolWidth:Number = parseFloat(configXML.symbols.picturemarkersymbol.@width[0]);
+					const resultMarkerSymbolWidth:Number = isNaN(parsedResultMarkerSymbolWidth) ? 0 : parsedResultMarkerSymbolWidth;
+					const resultMarkerSymbolXOffset:Number = (configXML.symbols.picturemarkersymbol.@xoffset != null) ? configXML.symbols.picturemarkersymbol.@xoffset : 0;
+					const resultMarkerSymbolYOffset:Number = (configXML.symbols.picturemarkersymbol.@yoffset != null) ? configXML.symbols.picturemarkersymbol.@yoffset : 0;
+					resultMarkerSymbol = new PictureMarkerSymbol(resultMarkerSymbolURL, resultMarkerSymbolWidth, resultMarkerSymbolHeight, resultMarkerSymbolXOffset, resultMarkerSymbolYOffset);
+					
+					const resultLineSymbolColor:uint = (configXML.symbols.simplelinesymbol.@color[0] != null) ? configXML.symbols.simplelinesymbol.@color : 0xFF0000;
+					const resultLineSymbolAlpha:Number = (configXML.symbols.simplelinesymbol.@alpha[0] != null) ? configXML.symbols.simplelinesymbol.@alpha : 0.8;
+					const resultLineSymbolWidth:Number = (configXML.symbols.simplelinesymbol.@width[0] != null) ? configXML.symbols.simplelinesymbol.@width : 2;
+					resultLineSymbol = new SimpleLineSymbol(SimpleLineSymbol.STYLE_SOLID, resultLineSymbolColor, resultLineSymbolAlpha, resultLineSymbolWidth);
+					
+					const resultFillSymbolColor:uint = (configXML.symbols.simplefillsymbol.@color[0] != null) ? configXML.symbols.simplefillsymbol.@color : 0xFF0000;
+					const resultFillSymbolAlpha:Number = (configXML.symbols.simplefillsymbol.@alpha[0] != null) ? configXML.symbols.simplefillsymbol.@alpha : 0.5;
+					const resultFillSymbolOutlineColor:uint = (configXML.symbols.simplefillsymbol.outline.@color[0] != null) ? configXML.symbols.simplefillsymbol.outline.@color : 0xFF0000;
+					const resultFillSymbolOutlineAlpha:Number = (configXML.symbols.simplefillsymbol.outline.@alpha[0] != null) ? configXML.symbols.simplefillsymbol.outline.@alpha : 0.8;
+					const resultFillSymbolOutlineWidth:Number = (configXML.symbols.simplefillsymbol.outline.@width[0] != null) ? configXML.symbols.simplefillsymbol.outline.@width : 2;
+					resultFillSymbol = new SimpleFillSymbol(SimpleFillSymbol.STYLE_SOLID, resultFillSymbolColor, resultFillSymbolAlpha, new SimpleLineSymbol(SimpleLineSymbol.STYLE_SOLID, resultFillSymbolOutlineColor, resultFillSymbolOutlineAlpha, resultFillSymbolOutlineWidth));
+					
+					resultFeatureLayer = new FeatureLayer();
+					resultFeatureLayer.visible = false;
+					resultFeatureLayer.isEditable = false;
+					
+					var clustererParser:ClustererParser = new ClustererParser();
+					var clusterer:IClusterer = clustererParser.parseClusterer(configXML.clustering[0]);
+					if (clusterer)
+					{
+						resultFeatureLayer.clusterer = clusterer;
+					}
+					
+					resultFeatureLayer.addEventListener(FlexEvent.HIDE, resultFeatureLayer_hideHandler);
+					
+					var userTolerance:Number = configXML.tolerance;
+					if (userTolerance > 0)
+					{
+						pointSearchTolerance = userTolerance;
+					}
+					
+					if (Number(configXML.zoomscale) > 0)
+					{
+						zoomScale = Number(configXML.zoomscale);
+					}
+                }
+				
+				mapLayers = map.layers as ArrayCollection;
+				layersUsedInAttributeTable = getLayers(mapLayers);
+				
+				populateAttributeTableTabBar(layersUsedInAttributeTable);
+				map.addEventListener(ResizeEvent.RESIZE, resizeHandler);
+				setupTextSearch();
+            }
+			
+			private function resultFeatureLayer_hideHandler(event:FlexEvent):void
+			{
+				hideInfoWindow();
+			}
+			
+			private function buildVisibleLayers(value:Array):ArrayCollection
+			{
+				var ac:ArrayCollection = new ArrayCollection();
+				var li:LayerInfo
+				for each( li in value){
+					if(li.defaultVisibility)
+						ac.addItem(li.layerId);
+				}
+				return ac;
+			}
+			
+			private function buildLayerName(name:String):String
+			{
+				var widgetName:String = configXML.layername || widgetTitle;
+				name = name ? name : widgetName;
+				
+				if (widgetName == name)
+				{
+					return shareResults ? widgetName : "hiddenLayer_" + widgetName;
+				}
+				
+				var layerNameTemplate:String =
+					(layoutDirection == LayoutDirection.LTR) ? "{0} - {1}" : "{1} - {0}";
+				
+				layerNameTemplate =
+					shareResults ? layerNameTemplate : "hiddenLayer_" + layerNameTemplate;
+				
+				return StringUtil.substitute(layerNameTemplate, widgetName, name);
+			}
+			
+			protected  function showLayer(layer:Layer):void
+			{
+				layer.visible = true;
+				var visibleLayers:ArrayCollection;
+				if(layer is ArcGISDynamicMapServiceLayer)
+				{
+					//获取当前可见图层列表
+					var agsDMS:ArcGISDynamicMapServiceLayer = layer as ArcGISDynamicMapServiceLayer; 
+					if(!agsDMS.visibleLayers){
+						visibleLayers = buildVisibleLayers(agsDMS.layerInfos);
+					}else{
+						visibleLayers = agsDMS.visibleLayers as ArrayCollection;
+					}
+					
+					//在当前可见图层列表中加入要显示的图层
+					visibleLayers.addItem(11);
+				}
+				else if(layer is ArcIMSMapServiceLayer)
+				{
+					//获取当前可见图层列表
+					if(!ArcGISDynamicMapServiceLayer(layer).visibleLayers){
+						visibleLayers = buildVisibleLayers(ArcIMSMapServiceLayer(layer).layerInfos);
+					}else{
+						visibleLayers = ArcIMSMapServiceLayer(layer).visibleLayers as ArrayCollection;
+					}
+					
+					//在当前可见图层列表中加入要显示的图层
+					visibleLayers.addItem(11);
+				}
+				//设置鼠标显示状态
+				if (visibleLayers)
+				{
+					cursorManager.setBusyCursor();
+				}
+			}
+			
+			protected function hideLayer(layer:Layer):void
+			{
+				layer.visible = false;
+				var visibleLayers:ArrayCollection;
+				if(layer is ArcGISDynamicMapServiceLayer)
+				{
+					//获取当前可见图层列表
+					if(!ArcGISDynamicMapServiceLayer(layer).visibleLayers){
+						visibleLayers = buildVisibleLayers(ArcGISDynamicMapServiceLayer(layer).layerInfos);
+					}else{
+						visibleLayers = ArcGISDynamicMapServiceLayer(layer).visibleLayers as ArrayCollection;
+					}
+					//查找要隐藏的图层的index
+					var index:int=visibleLayers.getItemIndex(11);
+					//在当前可见图层列表中去除要隐藏的图层
+					if (index != -1)
+					{
+						visibleLayers.removeItemAt(index);
+					}
+				}
+				else if(layer is ArcIMSMapServiceLayer)
+				{
+					//获取当前可见图层列表
+					if(!ArcIMSMapServiceLayer(layer).visibleLayers){
+						visibleLayers = buildVisibleLayers(ArcIMSMapServiceLayer(layer).layerInfos);
+					}else{
+						visibleLayers = ArcIMSMapServiceLayer(layer).visibleLayers as ArrayCollection;
+					}
+					
+					//查找要隐藏的图层的index
+					var index2:int=visibleLayers.getItemIndex(11);
+					//在当前可见图层列表中去除要隐藏的图层
+					if (index2 != -1)
+					{
+						visibleLayers.removeItemAt(index2);
+					}
+				}
+				//设置鼠标显示状态
+				if (visibleLayers)
+				{
+					cursorManager.setBusyCursor();
+				}
+			}
+			
+			private function clearAllLabelColor():void
+			{
+				for(var i:int=0; i<classTable.numElements;i++)
+				{
+					(classTable.getElementAt(i) as Label).setStyle("backgroundColor","#ededed");
+				}
+			}
+			
+			private function hideAll():void
+			{
+				var dyn1:FeatureLayer = map.getLayer(enterpriseName) as FeatureLayer;
+				var dyn2:FeatureLayer = map.getLayer(industryName) as FeatureLayer;
+				var dyn3:FeatureLayer = map.getLayer(smallShopName) as FeatureLayer;
+				hideLayer(dyn1);
+				hideLayer(dyn2);	
+				hideLayer(dyn3);	
+			}
+			
+			private function showAll():void
+			{
+				var dyn1:FeatureLayer = map.getLayer(enterpriseName) as FeatureLayer;
+				var dyn2:FeatureLayer = map.getLayer(industryName) as FeatureLayer;
+				var dyn3:FeatureLayer = map.getLayer(smallShopName) as FeatureLayer;
+				showLayer(dyn1);
+				showLayer(dyn2);	
+				showLayer(dyn3);	
+			}
+			
+			protected function DistrictProspective_clickHandler(event:MouseEvent):void
+			{
+				clearAllLabelColor();
+				/* var dyn:FeatureLayer = map.getLayer(districtProspective) as FeatureLayer;
+				if(isDistrictVisible){
+					hideLayer(dyn);	
+					isDistrictVisible=false;
+				}else{
+					showLayer(dyn);
+					isDistrictVisible=true;
+				} */
+				showAll();
+				var tLb:Label = event.target as Label;
+				tLb.setStyle("backgroundColor","#79d1ff");
+			}
+			
+			protected function IndustryDistrict_clickHandler( event:MouseEvent ):void
+			{
+				clearAllLabelColor();
+				hideAll();
+				var dyn:FeatureLayer = map.getLayer(industryName) as FeatureLayer;
+				showLayer(dyn);
+				/* if(isIndustryVisible){
+					hideLayer(dyn);	
+					isIndustryVisible =false;
+				}else{
+					showLayer(dyn);
+					isIndustryVisible = true;
+				} */
+				//flash();
+				var tLb:Label = event.target as Label;
+				tLb.setStyle("backgroundColor","#79d1ff");
+			}
+			
+			protected function Enterprise_clickHandler( event:MouseEvent ):void
+			{
+				clearAllLabelColor();
+				hideAll();
+				var dyn:FeatureLayer = map.getLayer(enterpriseName) as FeatureLayer;
+				showLayer(dyn);
+				/* if(isEnterpriseVisible){
+					hideLayer(dyn);	
+					isEnterpriseVisible = false;
+				}else{
+					showLayer(dyn);
+					isEnterpriseVisible = true;
+				} */
+				
+				var tLb:Label = event.target as Label;
+				tLb.setStyle("backgroundColor","#79d1ff");
+				
+			}
+			
+			protected  function SmallShop_clickHandler( event:MouseEvent ):void
+			{
+				clearAllLabelColor();
+				hideAll();
+				var dyn:FeatureLayer = map.getLayer(smallShopName) as FeatureLayer;
+				showLayer(dyn);
+				/* 
+				if(isSmallShopVisible){
+					hideLayer(dyn);	
+					isSmallShopVisible = false;
+				}else{
+					showLayer(dyn);
+					isSmallShopVisible = true;
+				} */
+				var tLb:Label = event.target as Label;
+				tLb.setStyle("backgroundColor","#79d1ff");
+			}
+			
+			private var intervalID:uint;
+			private function flash():void
+			{
+				var layersA:ArrayCollection = map.layers as ArrayCollection;
+				
+				var visibleCount:int = 0;
+				var visibleLayerID:String = "";
+				for each(var l:Layer in layersA)
+				{
+					if(l is FeatureLayer)
+					{
+						if(l.visible)
+						{
+							++visibleCount;
+							if(visibleCount>1)
+								break;
+							visibleLayerID = l.id;
+						}
+					}
+				}
+				
+				if(visibleCount==1)
+				{
+					if(visibleLayerID=="工矿商贸企业")
+						intervalID = setInterval(IndustryDistrict_clickHandler,300);
+					else if(visibleLayerID=="公众聚集场所")
+						intervalID = setInterval(Enterprise_clickHandler,300);
+					else if(visibleLayerID=="三小场所")
+						intervalID = setInterval(SmallShop_clickHandler,300);
+					
+				}
+				else
+				{
+					//clearInterval(intervalID);
+				}
+			}
+			
+			private function createContainer():void
+			{
+				
+			}
+			protected function SmallShopTab_clickHandler(/* event:MouseEvent */):void
+			{
+				twTab.title = "三小场所报表";
+				
+				twTab.width=map.width;
+				twTab.height=map.height-50;
+				twTab.removeAllElements();
+				
+				viewStack.selectedIndex = 0;
+				twTab.addElement(viewStack);
+
+				PopUpManager.addPopUp(twTab,this,false);
+				twTab.isPopUp=false;
+				twTab.addEventListener(CloseEvent.CLOSE,titlewindow1_closeHandler);
+			}
+			
+			protected function titlewindow1_closeHandler(event:CloseEvent):void
+			{
+				PopUpManager.removePopUp(twTab);
+			}
+			
+			protected function titlewindow2_closeHandler(event:CloseEvent):void
+			{
+				if (resultFeatureLayer)
+				{
+					resultFeatureLayer.featureCollection = new FeatureCollection(new FeatureSet(), resultFeatureLayer.layerDetails); // empty featureset to clear
+				}
+				
+				txtSearch.text = "";
+				if (searchResultAC)
+				{
+					searchResultAC.removeAll();
+				}
+				PopUpManager.removePopUp(twTab);
+			}
+			
+			protected function EnterpriseTab_clickHandler(/* event:MouseEvent */):void
+			{
+				twTab.title = "公共聚集场所报表";
+				twTab.width=map.width;
+				twTab.height=map.height-50;
+				twTab.removeAllElements();
+				
+				viewStack.selectedIndex = 1;
+				twTab.addElement(viewStack);
+				
+				PopUpManager.addPopUp(twTab,this,false);
+				twTab.isPopUp=false;
+				twTab.addEventListener(CloseEvent.CLOSE,titlewindow1_closeHandler);
+			}
+			
+			protected function IndustryDistrictTab_clickHandler(/* event:MouseEvent */):void
+			{
+				twTab.title = "工矿商贸企业报表";
+				twTab.width=map.width;
+				twTab.height=map.height-50;
+				twTab.removeAllElements();
+				
+				viewStack.selectedIndex = 2;
+				twTab.addElement(viewStack);
+				
+				PopUpManager.addPopUp(twTab,this,false);
+				twTab.isPopUp=false;	
+				twTab.addEventListener(CloseEvent.CLOSE,titlewindow1_closeHandler);
+			}
+			
+			protected function textinput1_enterHandler(event:FlexEvent):void
+			{
+				twTab.removeAllElements();
+				searchCount = 0;
+				if (resultFeatureLayer)
+				{
+					resultFeatureLayer.featureCollection = new FeatureCollection(new FeatureSet(), resultFeatureLayer.layerDetails); // empty featureset to clear
+				}
+				if (searchResultAC)
+				{
+					searchResultAC.removeAll();
+				} 
+				gFeatureSet = null;
+				searchByCustom(0);
+			}
+			
+			private function searchLayer_loadHandler(event:LayerEvent):void
+			{
+				var layer:FeatureLayer = event.layer as FeatureLayer;
+				layer.removeEventListener(LayerEvent.LOAD, searchLayer_loadHandler);
+				layer.removeEventListener(LayerEvent.LOAD_ERROR, searchLayer_faultHandler);
+				
+				layer.layerDetails.minScale = 0; // removing scale dependency
+				layer.layerDetails.maxScale = 0;
+			}
+			
+			private function searchLayer_faultHandler(event:LayerEvent):void
+			{
+				var layer:FeatureLayer = event.currentTarget as FeatureLayer;
+				
+				layer.removeEventListener(LayerEvent.LOAD, searchLayer_loadHandler);
+				layer.removeEventListener(LayerEvent.LOAD_ERROR, searchLayer_faultHandler);
+				
+				showLoadErrorMessage(event);
+			}
+			
+			private function hideInfoWindow():void
+			{
+				if (map.infoWindow.contentOwner &&
+					((map.infoWindow.contentOwner is Graphic && Graphic(map.infoWindow.contentOwner).graphicsLayer === resultFeatureLayer) || map.infoWindow.contentOwner is Map))
+				{
+					map.infoWindow.hide();
+				} 
+			}
+
+			private function setupTextSearch():void
+			{
+				if (configSearchText.length)
+				{
+					cboLayerText.dataProvider = new ArrayList(configSearchText);
+					cboLayerText.typicalItem = LabelUtil.findLongestLabelItem(configSearchText, "label");
+				}
+			}
+			
+			protected function button1_clickHandler(event:MouseEvent):void
+			{
+				twTab.removeAllElements();
+				searchCount = 0;
+				if (resultFeatureLayer)
+				{
+					resultFeatureLayer.featureCollection = new FeatureCollection(new FeatureSet(), resultFeatureLayer.layerDetails); // empty featureset to clear
+				}
+				if (searchResultAC)
+				{
+					searchResultAC.removeAll();
+				}
+				gFeatureSet = null;
+				/*
+					0 三小场所
+					1 工业企业
+				    2 公众聚集
+				*/
+				searchByCustom(0);
+				
+			}
+			
+			private function showLoadErrorMessage(event:LayerEvent):void
+			{
+				var errorMessage:String = getDefaultString("layerFailedToLoad",
+					event.layer.name,
+					ErrorMessageUtil.makeHTMLSafe(ErrorMessageUtil.buildFaultMessage(event.fault)));
+				
+				showError(errorMessage);
+			}
+			
+			private function searchByCustom(o:int):void
+			{
+				//hideInfoWindow();  清除所有的搜索标记
+				if(configSearchText.length<=0)
+					return;
+				var searchLayer:Object = configSearchText[o];
+				
+				queryLayer = searchLayer.layer;
+				
+				if (queryLayer && !queryLayer.loaded)
+				{
+					queryLayer.addEventListener(LayerEvent.LOAD, queryLayer_loadHandler);
+					queryLayer.addEventListener(LayerEvent.LOAD_ERROR, queryLayer_loadErrorHandler);
+					
+					function queryLayer_loadHandler(event:LayerEvent):void
+					{
+						queryLayer.removeEventListener(LayerEvent.LOAD, queryLayer_loadHandler);
+						queryLayer.removeEventListener(LayerEvent.LOAD_ERROR, queryLayer_loadErrorHandler);
+						
+						searchByCustom(o);
+					}
+					
+					function queryLayer_loadErrorHandler(event:LayerEvent):void
+					{
+						queryLayer.removeEventListener(LayerEvent.LOAD, queryLayer_loadHandler);
+						queryLayer.removeEventListener(LayerEvent.LOAD_ERROR, queryLayer_loadErrorHandler);
+						
+						showLoadErrorMessage(event);
+					}
+					
+					return;
+				}
+				
+				queryExpr = searchLayer.expr;
+				queryFields = searchLayer.fields;
+				queryTitleField = searchLayer.titlefield;
+				queryLinkField = searchLayer.linkfield;
+				queryLinkAlias = searchLayer.linkalias;
+				querySymbol = searchLayer.symbol;
+				
+				if (queryLayer && txtSearch.text)
+				{
+					var query:Query = new Query();
+					var expr:String = queryExpr.replace(/\[value\]/g, txtSearch.text);
+					
+					query.where = expr;
+					query.outSpatialReference = map.spatialReference;
+					
+					const supportsServerSideSorting:Boolean = queryLayer.layerDetails
+						&& queryLayer.layerDetails.version >= 10.1
+						&& queryLayer.layerDetails.supportsAdvancedQueries;
+					const orderByFields:Array = searchLayer.orderbyfields;
+					if (supportsServerSideSorting && orderByFields)
+					{
+						query.orderByFields = orderByFields;
+					}
+					
+					var queryOptions:Object =
+						{
+							supportsServerSideSorting: supportsServerSideSorting,
+							orderByFields: orderByFields,
+							queryFields: queryFields
+						};
+					
+					queryLayer.queryFeatures(
+						query, new AsyncResponder(queryFeatures_resultHandler,
+							queryFeatures_faultHandler,
+							queryOptions));
+					
+					showMessage(loadingLabel, true);
+					
+					
+					//显示结果showStateResults();
+				}
+			}
+			
+			private function showMessage(msg:String, swfVisible:Boolean):void
+			{
+				/* 在结果中显示 
+				txtMessage.text = msg;
+				swfMessage.visible = swfVisible;
+				msgVisible = true; */
+			}
+			
+			private var gFeatureSet:FeatureSet;
+			private function queryFeatures_resultHandler(featureSet:FeatureSet, queryOptions:Object):void
+			{
+				searchCount++;
+				try
+				{
+					if (!queryOptions.supportsServerSideSorting && queryOptions.orderByFields)
+					{
+						FeatureSetUtil.sortFeaturesByFieldName(featureSet, queryOptions.orderByFields);
+					}
+					
+					var temRes:ArrayCollection = createSearchResults(featureSet, queryOptions.queryFields,searchCount);
+					if(searchResultAC){
+						searchResultAC.addAll(temRes.list);
+					}else{
+						searchResultAC=temRes;
+					}
+					//addSharedData(widgetTitle, searchResultAC);
+					if (featureSet.features.length < 1)
+					{
+						//showMessage(noResultLabel, false);
+					}
+					else
+					{
+						showMessage(selectionLabel + " " + featureSet.features.length, false);
+					}
+				}
+				catch (error:Error)
+				{
+					showMessage(error.message, false);
+				}
+				
+				if (!resultFeatureLayer.map)
+				{
+					map.addLayer(resultFeatureLayer);
+				}
+				
+				if(searchCount<configSearchText.length)
+				{
+					searchByCustom(searchCount);
+				}
+				
+				if(gFeatureSet){
+					var tArr:Array = gFeatureSet.features.concat(featureSet.features);
+					gFeatureSet = new FeatureSet(tArr);
+				}else{
+					gFeatureSet=featureSet;
+				}
+				
+				if(searchCount == 3){
+					
+					//添加标注
+					var layerDetails:LayerDetails = queryLayer.layerDetails;
+					var defaultSymbol:Symbol = querySymbol ? querySymbol : getMatchingDefaultSymbol(featureSet.geometryType);
+					//resultFeatureLayer.outFields = queryLayer.outFields;
+					resultFeatureLayer.visible = true;
+					resultFeatureLayer.featureCollection = new FeatureCollection(gFeatureSet, layerDetails);
+					resultFeatureLayer.name = queryLayer.name;
+					resultFeatureLayer.renderer = new SimpleRenderer(defaultSymbol);
+					
+					//添加搜索结果对话框
+					twTab.title="搜索结果";
+					twTab.width=300;
+					twTab.height=500;
+					
+					searchRes.dataProvider = searchResultAC;
+					searchRes.addEventListener("searchResultClick",clickSearchResult);
+					var vl:VerticalLayout = new VerticalLayout();
+					vl.gap = 2;
+					vl.horizontalAlign="justify";
+					vl.useVirtualLayout = true;
+					
+					searchRes.setStyle("verticalAlign","middle");
+					searchRes.layout = vl;
+					scallbar.viewport = (searchRes);
+					twTab.addElement(scallbar);
+					PopUpManager.addPopUp(twTab,this,false);
+					
+					twTab.addEventListener(CloseEvent.CLOSE,titlewindow2_closeHandler);
+				}
+				
+			}
+			
+			private var hitimer:uint;
+			private function clickSearchResult(event:Event):void
+			{
+				if (resultFeatureLayer.visible)
+				{
+					var searchResult:ResultItem = ItemRenderer(event.target).data as ResultItem;
+					if (searchResult.geometry)
+					{
+						if (searchResult.geometry.type == Geometry.MAPPOINT)
+						{
+							if (map.scale > zoomScale)
+							{
+								map.scale = zoomScale;
+							}
+						}
+						
+						map.zoomTo(searchResult.geometry);
+					}
+					clearTimeout(hitimer);
+					hitimer = setTimeout(showHighlight, 300, [ searchResult ]);
+				}
+			}
+			
+			private function queryFeatures_faultHandler(info:Object, queryOptions:Object):void
+			{
+				showMessage(info.toString(), false);
+			}
+			private function widgetClosedHandler(event:Event):void
+			{
+				for each (var featureLayer:FeatureLayer in featureLayers)
+				{
+					featureLayer.clearSelection();
+				}
+			}
+			
+			private function createSearchResults(featureSet:FeatureSet, queryFields:XMLList, lyrC:uint):ArrayCollection
+			{
+				var result:ArrayCollection = new ArrayCollection();
+				
+				var layerDetails:LayerDetails = queryLayer.layerDetails;
+				if (!queryTitleField)
+				{
+					queryTitleField = featureSet.displayFieldName;
+				}
+				
+				var defaultSymbol:Symbol = querySymbol ? querySymbol : getMatchingDefaultSymbol(featureSet.geometryType);
+				var resultAttributes:ResultAttributes;
+				var infoWindowRenderer:ClassFactory;
+				
+				for each (var graphic:Graphic in featureSet.features)
+				{
+					graphic.symbol = defaultSymbol;
+					
+					resultAttributes =
+						ResultAttributes.toResultAttributes(queryFields, graphic, featureSet,
+							queryLayer, layerDetails, widgetTitle,
+							queryTitleField, queryLinkField, queryLinkAlias);
+					
+					result.addItem(new ResultItem(graphic, resultAttributes,lyrC));
+					
+					infoWindowRenderer = new ClassFactory(PopUpRenderer);
+					infoWindowRenderer.properties = { popUpInfo: configurePopUpInfo(resultAttributes)};
+					
+					//graphic.infoWindowRenderer = infoWindowRenderer;
+				}
+				
+				
+				
+				return result;
+			}
+			
+			private function configurePopUpInfo(resultAttributes:ResultAttributes):PopUpInfo
+			{
+				var popUpInfo:PopUpInfo = new PopUpInfo;
+				
+				popUpInfo.title = resultAttributes.title;
+				popUpInfo.description = resultAttributes.content;
+				popUpInfo.showZoomToButton = false;
+				
+				
+				
+				var link:String = resultAttributes.link;
+				var linkAlias:String = resultAttributes.linkAlias
+				if (link)
+				{
+					var pos:Number = link.length - 4;
+					var sfx:String = link.substr(pos, 4).toLowerCase();
+					var isImageLink:Boolean = (sfx == ".jpg") || (sfx == ".png") || (sfx == ".gif");
+					
+					if (isImageLink)
+					{
+						var popUpMediaInfo:PopUpMediaInfo = new PopUpMediaInfo;
+						popUpMediaInfo.type = PopUpMediaInfo.IMAGE;
+						popUpMediaInfo.imageLinkURL = link;
+						popUpMediaInfo.imageSourceURL = link;
+						popUpInfo.popUpMediaInfos = [ popUpMediaInfo ];
+					}
+					else
+					{
+						var linkText:String = linkAlias ? linkAlias : link;
+						popUpInfo.description += "<br/><a href='" + link + "'>" + linkText + "</a>";
+					}
+				}
+				
+				return popUpInfo;
+			}
+			
+			private function getMatchingDefaultSymbol(geometryType:String):Symbol
+			{
+				var defaultSymbol:Symbol;
+				
+				switch (geometryType)
+				{
+					case Geometry.MAPPOINT:
+					{
+						defaultSymbol = resultMarkerSymbol;
+						break;
+					}
+					case Geometry.POLYLINE:
+					{
+						defaultSymbol = resultLineSymbol;
+						break;
+					}
+					case Geometry.POLYGON:
+					{
+						defaultSymbol = resultFillSymbol;
+						break;
+					}
+				}
+				
+				return defaultSymbol;
+			}
+			
+			private function showHighlight(params:Array):void
+			{
+				var searchResult:ResultItem = params[0];
+				var showHighlightPoint:MapPoint = searchResult.center as MapPoint;
+				var linkAlias:String = searchResult.attributes.linkAlias;
+				
+				if(this.currentState !="admin"){
+					popUpRenderer.popUpInfo = configurePopUpInfo(searchResult.attributes);
+					popUpRenderer.graphic = searchResult.graphic;
+					popUpRenderer.mousePoint = showHighlightPoint;
+					
+					map.infoWindow.content = popUpRenderer; 	
+					map.infoWindow.contentOwner = popUpRenderer.graphic;
+				}else{
+					editorPopUpRenderer.popUpInfo = configurePopUpInfo(searchResult.attributes);
+					editorPopUpRenderer.graphic = searchResult.graphic;
+					editorPopUpRenderer.mousePoint = showHighlightPoint;
+					editorPopUpRenderer.layerNum = searchResult.layerNum;
+					editorPopUpRenderer.map = map;
+					map.infoWindow.content = editorPopUpRenderer; 
+					map.infoWindow.contentOwner = editorPopUpRenderer.graphic;	
+				}
+				
+				map.infoWindow.show(showHighlightPoint); 
+				
+			}
+			
+			private function createAttributeTableForFeatureLayer(featureLayer:FeatureLayer):void
+			{
+				if (!featureLayerToNavigatorContent[featureLayer])
+				{
+					var attributeTable:AttributeTable = new AttributeTable(featureLayer);
+					attributeTable.exportLocation =  false;
+					
+					var settingsKey:String = featureLayer.name;
+					if (settingsKey.indexOf("hiddenLayer_") != -1)
+					{
+						settingsKey = hiddenFeatureLayerToSettingsName[featureLayer];
+					}
+					const settings:Object = featureLayerToSettings[settingsKey];
+					if (settings)
+					{
+						var outFields:Array = settings.outFields as Array;
+						if (outFields && outFields.length)
+						{
+							var attributeTableFieldInspectors:Array = [];
+							var fieldInspector:FieldInspector;
+							for each (var fieldObject:Object in outFields)
+							{
+								fieldInspector = new FieldInspector;
+								fieldInspector.featureLayer = featureLayer;
+								fieldInspector.visible = true;
+								fieldInspector.fieldName = fieldObject.name;
+								fieldInspector.label = fieldObject.alias;
+								fieldInspector.toolTip = fieldObject.tooltip;
+								if (isDateField(fieldObject.name, featureLayer) &&
+									(fieldObject.dateFormat != null || fieldObject.useUTC != null))
+								{
+									var calendarFieldFactory:ClassFactory = new ClassFactory(CalendarField);
+									calendarFieldFactory.properties = {};
+									if (fieldObject.dateFormat != null)
+									{
+										calendarFieldFactory.properties.dateFormat = fieldObject.dateFormat;
+									}
+									if (fieldObject.useUTC != null)
+									{
+										calendarFieldFactory.properties.useUTC = fieldObject.useUTC;
+									}
+									fieldInspector.editor = calendarFieldFactory;
+								}
+								attributeTableFieldInspectors.push(fieldInspector);
+							}
+							for each (var field:Field in getFields(featureLayer))
+							{
+								if (outFields.indexOf(field.name) == -1)
+								{
+									fieldInspector = new FieldInspector;
+									fieldInspector.featureLayer = featureLayer;
+									fieldInspector.visible = false;
+									fieldInspector.fieldName = field.name;
+									
+									attributeTableFieldInspectors.push(fieldInspector);
+								}
+							}
+							attributeTable.fieldInspectors = attributeTableFieldInspectors;
+							attributeTable.columnsOrder = AttributeTable.FIELD_INSPECTOR_ORDER;
+						}
+						else
+						{
+							if (settings.columnsOrder)
+							{
+								attributeTable.columnsOrder = settings.columnsOrder;
+							}
+						}
+						if (settings.showObjectId)
+						{
+							attributeTable.showObjectID = settings.showObjectId == "true";
+						}
+						if (settings.showGlobalId)
+						{
+							attributeTable.showGlobalID = settings.showGlobalId == "true";
+						}
+						if (settings.exportLocation)
+						{
+							attributeTable.exportLocation = false;
+						}
+						if (settings.exportColumnDelimiter)
+						{
+							attributeTable.exportColumnDelimiter = settings.exportColumnDelimiter;
+						}
+						if (settings.showAttachments)
+						{
+							attributeTable.showAttachments = false;
+						}
+						if (settings.showRelatedRecords)
+						{
+							attributeTable.showRelatedRecords = settings.showRelatedRecords == "true";
+						}
+					}
+					attributeTable.showAttachments = false;
+					attributeTable.showTitle = false;
+					attributeTable.percentWidth = 100;
+					attributeTable.percentHeight = 100;
+					
+					var navigatorContent:NavigatorContent = new NavigatorContent;
+					var label:String = featureLayer.name;
+					navigatorContent.label = label.indexOf("hiddenLayer_") == -1 ? label : label.substring(12, label.length);
+					navigatorContent.addElement(attributeTable);
+					
+					featureLayerToNavigatorContent[featureLayer] = navigatorContent;
+					featureLayerToAttributeTable[featureLayer] = attributeTable;
+				}
+			}
+			
+			private function isDateField(fieldName:String, featureLayer:FeatureLayer):Boolean
+			{
+				var result:Boolean;
+				
+				var fields:Array = getFields(featureLayer);
+				if (fields)
+				{
+					for each (var field:Field in fields)
+					{
+						if (field.name == fieldName && field.type == Field.TYPE_DATE)
+						{
+							result = true;
+							break;
+						}
+					}
+				}
+				
+				return result;
+			}
+			
+			private function addAttributeTableTab(featureLayer:FeatureLayer):void
+			{
+				if (featureLayer.visible)
+				{
+					var navigatorContent:NavigatorContent = featureLayerToNavigatorContent[featureLayer] as NavigatorContent;
+					if (navigatorContent)
+					{
+						viewStack.addChild(navigatorContent);
+					}
+				}
+			}
+			
+			private function featureLayer_loadHandler(event:LayerEvent):void
+			{
+				event.layer.removeEventListener(LayerEvent.LOAD, featureLayer_loadHandler);
+				event.layer.removeEventListener(LayerEvent.LOAD_ERROR, featureLayer_loadErrorHandler);
+				getAllFeatureLayers(layersUsedInAttributeTable.indexOf(event.layer), featureLayers);
+			}
+			
+			private function featureLayer_loadErrorHandler(event:LayerEvent):void
+			{
+				event.layer.removeEventListener(LayerEvent.LOAD, featureLayer_loadHandler);
+				event.layer.removeEventListener(LayerEvent.LOAD_ERROR, featureLayer_loadErrorHandler);
+				getAllFeatureLayers(layersUsedInAttributeTable.indexOf(event.layer), featureLayers);
+			}
+			
+			private function featureLayer_hideShowHandler(event:FlexEvent):void
+			{
+				var featureLayer:FeatureLayer = event.target as FeatureLayer;
+				if (featureLayer.visible)
+				{
+					viewStack.removeAllChildren();
+					for each (var fLayer:FeatureLayer in featureLayers)
+					{
+						addAttributeTableTab(fLayer);
+					}
+					AttributeTable(featureLayerToAttributeTable[featureLayer]).refresh();
+				}
+				else
+				{
+					var navigatorContent:NavigatorContent = featureLayerToNavigatorContent[featureLayer];
+					if (navigatorContent)
+					{
+						viewStack.removeChild(navigatorContent);
+					}
+				}
+			}
+			
+			private function mapLayerAddHandler(event:MapEvent):void
+			{
+				if (event.layer.name.indexOf("hiddenLayer_") == -1)
+				{
+					if (event.layer is FeatureLayer)
+					{
+						//event.layer.addEventListener(FlexEvent.HIDE, featureLayer_hideShowHandler);
+						//event.layer.addEventListener(FlexEvent.SHOW, featureLayer_hideShowHandler);
+						
+						arrFinalLayers.unshift(event.layer);
+						featureLayers.unshift(event.layer);
+						
+						viewStack.removeAllChildren();
+						for each (var fLayer:FeatureLayer in featureLayers)
+						{
+							createAttributeTableForFeatureLayer(fLayer);
+							addAttributeTableTab(fLayer);
+						}
+						viewStack.selectedIndex = 0;
+					}
+				}
+			}
+			
+			private function mapLayerRemoveHandler(event:MapEvent):void
+			{
+				var index:int = arrFinalLayers.indexOf(event.layer);
+				if (index != -1)
+				{
+					if (event.layer is ArcGISDynamicMapServiceLayer)
+					{
+						for each (var fl:FeatureLayer in featureLayers)
+						{
+							if (fl.name.indexOf("hiddenLayer_") != -1 && featureLayerToDynamicMapService[fl] == event.layer)
+							{
+								map.removeLayer(fl);
+								featureLayers.splice(featureLayers.indexOf(fl), 1);
+							}
+						}
+					}
+					else if (event.layer is FeatureLayer)
+					{
+						for each (var fl1:FeatureLayer in featureLayers)
+						{
+							if (fl1 == event.layer)
+							{
+								featureLayers.splice(featureLayers.indexOf(fl1), 1);
+							}
+						}
+					}
+					delete arrFinalLayers[index];
+					viewStack.removeAllChildren();
+					for each (var fLayer:FeatureLayer in featureLayers)
+					{
+						addAttributeTableTab(fLayer);
+					}
+				}
+			}
+			
+			
+			private function getAllFeatureLayers(index:int, featureLayers:Array):void
+			{
+				if (index < layersUsedInAttributeTable.length)
+				{
+					var layer:Layer = layersUsedInAttributeTable[index] as Layer;
+					if (layer.name.indexOf("hiddenLayer_") == -1)
+					{
+						if (layer.loaded)
+						{
+							if (layer is FeatureLayer)
+							{
+								layer.removeEventListener(FlexEvent.HIDE, featureLayer_hideShowHandler);
+								layer.removeEventListener(FlexEvent.SHOW, featureLayer_hideShowHandler);
+								
+								//layer.addEventListener(FlexEvent.HIDE, featureLayer_hideShowHandler);
+								//layer.addEventListener(FlexEvent.SHOW, featureLayer_hideShowHandler);
+								
+								arrFinalLayers.push(layer);
+								featureLayers.push(layer);
+								index++;
+								getAllFeatureLayers(index, featureLayers);
+							}
+							else
+							{
+								index++;
+								getAllFeatureLayers(index, featureLayers);
+							}
+						}
+						else if (layer.loadFault)
+						{
+							index++;
+							getAllFeatureLayers(index, featureLayers);
+						}
+						else
+						{
+							layer.addEventListener(LayerEvent.LOAD, featureLayer_loadHandler);
+							layer.addEventListener(LayerEvent.LOAD_ERROR, featureLayer_loadErrorHandler);
+						}
+					}
+					else
+					{
+						index++;
+						getAllFeatureLayers(index, featureLayers);
+					}
+				}
+				else
+				{
+					if (featureLayers.length > 0)
+					{
+						viewStack.removeAllChildren();
+						for each (var featureLayer:FeatureLayer in featureLayers)
+						{
+							createAttributeTableForFeatureLayer(featureLayer);
+							addAttributeTableTab(featureLayer);
+						}
+					}
+				}
+			}
+			
+			private function populateAttributeTableTabBar(array:Array):void
+			{
+				arrFinalLayers = [];
+				featureLayers = [];
+				if (array && array.length)
+				{
+					var index:int = 0;
+					getAllFeatureLayers(index, featureLayers);
+				}
+			}
+			
+			private function getLayers(layers:ArrayCollection):Array
+			{
+				// all the layers except basemaps                
+				var result:Array = [];
+				var includeLayer:Boolean;
+				var dynamicBaseMapLayers:Array = [];
+				for (var i:int = layers.length - 1; i >= 0; i--)
+				{
+					includeLayer = true;
+					var layer:Layer = layers.getItemAt(i) as Layer;
+					for (var n:int = 0; n < configData.basemaps.length; )
+					{
+						if (configData.basemaps[n].label == layer.id)
+						{
+							if (layer is ArcGISDynamicMapServiceLayer)
+							{
+								dynamicBaseMapLayers.push(layer);
+							}
+							includeLayer = false;
+							break;
+						}
+						else
+						{
+							n++;
+						}
+					}
+					if (includeLayer && (layer is FeatureLayer || layer is ArcGISDynamicMapServiceLayer))
+					{
+						result.push(layer);
+					}
+				}
+				
+				return result;
+			}
+			
+			private function getFields(featureLayer:FeatureLayer):Array
+			{
+				var result:Array;
+				
+				if (featureLayer.layerDetails)
+				{
+					result = featureLayer.layerDetails.fields;
+				}
+				else if (featureLayer.tableDetails)
+				{
+					result = featureLayer.tableDetails.fields;
+				}
+				
+				return result;
+			}
+			
+			protected function myLable_rollOverHandler(event:MouseEvent):void
+			{
+				var tLb:Label = event.target as Label;
+				var backgroundColor:uint=tLb.getStyle("backgroundColor");
+				if(backgroundColor==0xededed){
+					tLb.setStyle("backgroundColor","#a6e0f6");
+				}
+			}
+			
+			protected function myLable_rollOutHandler(event:MouseEvent):void
+			{
+				var tLb:Label = event.target as Label;
+				var backgroundColor:uint=tLb.getStyle("backgroundColor");
+				if(backgroundColor==0xa6e0f6){
+					tLb.setStyle("backgroundColor","#ededed");
+				}
+				//tLb.setStyle("backgroundColor","#ededed");
+			}
+			
+			protected function txtSearch_focusInHandler(event:FocusEvent):void
+			{
+				txtSearch.text="";
+				txtSearch.setStyle("color",0x000000);
+			}
+			
+			
+			//用户管理界面
+			protected function UserManageTab_clickHandler( event:MouseEvent ):void
+			{
+				twTab.title = "用户管理";
+				twTab.width=map.width;
+				twTab.height=map.height;
+				twTab.removeAllElements();
+				
+				twTab.addElement(userMg);
+				
+				PopUpManager.addPopUp(twTab,this,false);
+				twTab.isPopUp=false;	
+				twTab.addEventListener(CloseEvent.CLOSE,titlewindow1_closeHandler);
+				
+			}
+			
+			protected function resizeHandler(event:ResizeEvent):void
+			{
+				twTab.width=map.width;
+				twTab.height=map.height;
+			}
+			
+			protected function popinfoClickHandler(event:MouseEvent):void
+			{
+				Alert.show("d");
+			}
+			
+			private var ti:Boolean = true;
+			protected function testMouseUpHandler(event:MouseEvent):void
+			{
+				// TODO Auto-generated method stub
+				if(ti){
+					tempMouseEvent = new MouseEvent(event.type,false,event.cancelable,event.localX,event.localY,event.relatedObject);
+					ti = false;
+				}
+			}
+			
+		]]>
+    </fx:Script>
+	<s:BorderContainer id="lPnlWidget" width="200" height="100%" backgroundColor="#FFFFFF"
+					   dropShadowVisible="true">
+		<s:layout>
+			<s:BasicLayout/>
+		</s:layout>
+		<!--搜索-->
+		<s:BorderContainer width="100%" height="73" borderVisible="false" symbolColor="#000000">
+			<s:DropDownList id="cboLayerText" x="113" y="40" width="75" height="35"
+							borderColor="#BABABA" dropShadowVisible="false" requireSelection="true" skinClass="com.esri.viewer.skins.SearchDDLSkin"
+						    visible="false"/>
+			<s:TextInput id="txtSearch" x="14" y="28" width="174" height="35" borderColor="#6E6E6E"
+						 borderVisible="true" color="#CECECE" enter="textinput1_enterHandler(event)"
+						 focusIn="txtSearch_focusInHandler(event)" text="请输入搜索的名称"/>
+			<s:Image x="154" y="29" width="33" height="33" alpha="1"
+					 click="button1_clickHandler(event)" source="@Embed('assets/images/search.png')"/>
+		</s:BorderContainer>
+		<!--分类显示-->
+		<s:BorderContainer id="classTable" x="1" y="90" width="100%" height="200"
+						   borderVisible="false">
+			<s:layout>
+				<s:VerticalLayout/>
+			</s:layout>
+				<s:Label width="100%" height="40" backgroundColor="#79d1ff" buttonMode="true"
+						 click="DistrictProspective_clickHandler(event)"
+						 rollOut="myLable_rollOutHandler(event)"
+						 rollOver="myLable_rollOverHandler(event)" text="叠加显示"  textAlign="center"
+						 verticalAlign="middle"/>
+				<s:Label width="100%" height="40" backgroundColor="#ededed" buttonMode="true"
+						 click="IndustryDistrict_clickHandler(event)"
+						 rollOut="myLable_rollOutHandler(event)"
+						 rollOver="myLable_rollOverHandler(event)" text="工业企业" textAlign="center"
+						 verticalAlign="middle"/>
+				<s:Label width="100%" height="40" backgroundColor="#ededed" buttonMode="true"
+						 click="Enterprise_clickHandler(event)" rollOut="myLable_rollOutHandler(event)"
+						 rollOver="myLable_rollOverHandler(event)" text="公众聚集" textAlign="center"
+						 verticalAlign="middle"/>
+				<s:Label width="100%" height="40" backgroundColor="#ededed" buttonMode="true"
+						 click="SmallShop_clickHandler(event)" rollOut="myLable_rollOutHandler(event)"
+						 rollOver="myLable_rollOverHandler(event)" text="三小场所" textAlign="center"
+						 verticalAlign="middle"/>
+				<s:Label width="100%" height="40" backgroundColor="#ededed" buttonMode="true"
+						 click="UserManageTab_clickHandler(event)" rollOut="myLable_rollOutHandler(event)"
+						 rollOver="myLable_rollOverHandler(event)" text="用户管理" textAlign="center"
+						 verticalAlign="middle" includeIn="admin"/>
+		</s:BorderContainer>
+		<!--图例-->
+		<s:BorderContainer bottom="0" width="100%" height="220" borderVisible="true"
+						   cornerRadius="0">
+			<s:Image x="33" y="64" source="@Embed('assets/images/sm.png')"/>
+			<s:Image x="33" y="99" source="@Embed('assets/images/pub.png')"/>
+			<s:Image x="33" y="132" source="@Embed('assets/images/ent.png')"/>
+			<s:Image x="29" y="165" source="assets/images/gongkuang.png"/>
+			<s:Label y="9" fontSize="24" horizontalCenter="0" text="图例"/>
+			<s:Label x="86" y="66" text="三小场所"/>
+			<s:Label x="84" y="102" text="公众聚集场所"/>
+			<s:Label x="84" y="134" text="工业企业"/>
+			<s:Label x="84" y="175" text="工业厂房"/>
+		</s:BorderContainer>
+	</s:BorderContainer>	
+</viewer:BaseWidget>

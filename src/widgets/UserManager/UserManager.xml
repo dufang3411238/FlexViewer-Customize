@@ -1,0 +1,67 @@
+<configuration>
+    <industry>工矿商贸企业</industry>
+    <enterprise>公众聚集场所</enterprise>
+    <smallshop>三小场所</smallshop>
+    <districtprospective>DistrictProspective</districtprospective>
+        <layers>
+        <layer>
+            <name>工业企业</name>
+            <url>http://113.108.119.116:6080/arcgis/rest/services/newDone/FeatureServer/1</url>
+            <expression>企业名称  like '%[value]%'</expression>
+            <titlefield>企业名称</titlefield>
+            <linkfield></linkfield>
+            <fields all="false">
+                <field name="企业名称"/>
+                <field name="生产经营地址"/>
+		        <field name="法定代表人"/>
+		        <field name="法人电话"/>
+		        <field name="联系人"/>
+		        <field name="联系人电话"/>
+		        <field name="行业类别"/>
+		        <field name="成立日期"/>
+		        <field name="经营范围"/>
+		        <field name="经营场所面积"/>
+		        <field name="从业人数"/>
+		        <field name="安全类别"/>
+		        <field name="安全等级"/>
+		        <field name="检查频次"/>
+		        <field name="所属社区"/>
+		        <field name="网格"/>
+		        <field name="网格管理员"/>
+		        <field name="消防警"/>
+		        <field name="监管单位"/>
+		        <field name="监管人"/>
+            </fields>
+        </layer>
+        <layer>
+            <name>公众聚集场所</name>
+            <url>http://113.108.119.116:6080/arcgis/rest/services/newDone/FeatureServer/2</url>
+            <expression>企业名称  like '%[value]%'</expression>
+            <titlefield>企业名称</titlefield>
+            <linkfield></linkfield>
+            <fields all="false">
+                <field name="企业名称"/>
+                <field name="生产经营地址"/>
+		        <field name="法定代表人"/>
+		        <field name="法人电话"/>
+		        <field name="联系人"/>
+		        <field name="联系人电话"/>
+		        <field name="行业类别"/>
+		        <field name="成立日期"/>
+		        <field name="经营范围"/>
+		        <field name="经营场所面积"/>
+		        <field name="从业人数"/>
+		        <field name="安全类别"/>
+		        <field name="安全等级"/>
+		        <field name="检查频次"/>
+		        <field name="所属社区"/>
+		        <field name="网格"/>
+		        <field name="网格管理员"/>
+		        <field name="消防警"/>
+		        <field name="监管单位"/>
+		        <field name="监管人"/>
+            </fields>
+        </layer>
+    </layers>
+    <zoomscale>10000</zoomscale>
+</configuration>

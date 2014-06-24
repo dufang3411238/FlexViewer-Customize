@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Skin xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		xmlns:s="library://ns.adobe.com/flex/spark" 
+		xmlns:mx="library://ns.adobe.com/flex/mx">
+	<!-- host component -->
+	<fx:Metadata>
+		[HostComponent("com.esri.ags.portal.PopUpRenderer")]
+	</fx:Metadata>
+	<s:BorderContainer x="0" y="0" width="213" height="200">
+		<s:BorderContainer left="0" width="100%" height="50">
+			<s:Label x="33" y="10" text="标签"/>
+		</s:BorderContainer>
+		<s:DataGrid x="0" y="56" requestedRowCount="4">
+			<s:columns>
+				<s:ArrayList>
+					<s:GridColumn dataField="dataField1" headerText="列 1"></s:GridColumn>
+					<s:GridColumn dataField="dataField2" headerText="列 2"></s:GridColumn>
+					<s:GridColumn dataField="dataField3" headerText="列 3"></s:GridColumn>
+				</s:ArrayList>
+			</s:columns>
+			<s:typicalItem>
+				<fx:Object dataField1="示例数据" dataField2="示例数据" dataField3="示例数据"></fx:Object>
+			</s:typicalItem>
+			<s:ArrayList>
+				<fx:Object dataField1="数据1" dataField2="数据1" dataField3="数据1"></fx:Object>
+				<fx:Object dataField1="数据2" dataField2="数据2" dataField3="数据2"></fx:Object>
+				<fx:Object dataField1="数据3" dataField2="数据3" dataField3="数据3"></fx:Object>
+				<fx:Object dataField1="数据4" dataField2="数据4" dataField3="数据4"></fx:Object>
+			</s:ArrayList>
+		</s:DataGrid>
+		
+	</s:BorderContainer>
+</s:Skin>

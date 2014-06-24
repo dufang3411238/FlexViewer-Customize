@@ -1,0 +1,1309 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+///////////////////////////////////////////////////////////////////////////
+// Copyright (c) 2010-2011 Esri. All Rights Reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+///////////////////////////////////////////////////////////////////////////
+-->
+<viewer:BaseWidget xmlns:fx="http://ns.adobe.com/mxml/2009"
+				   xmlns:s="library://ns.adobe.com/flex/spark"
+				   xmlns:mx="library://ns.adobe.com/flex/mx"
+				   xmlns:viewer="com.esri.viewer.*"
+				   width="100%" height="100%"
+				   creationComplete="addEventListenerShowClose_creationCompleteHandler(event)"
+				   layout="horizontal" widgetConfigLoaded="widgetConfigLoadedHandler()">
+	<fx:Script>
+		<![CDATA[
+			import com.esri.ags.FeatureSet;
+			import com.esri.ags.Graphic;
+			import com.esri.ags.Map;
+			import com.esri.ags.events.LayerEvent;
+			import com.esri.ags.geometry.Geometry;
+			import com.esri.ags.geometry.MapPoint;
+			import com.esri.ags.layers.FeatureLayer;
+			import com.esri.ags.layers.supportClasses.FeatureCollection;
+			import com.esri.ags.layers.supportClasses.LayerDetails;
+			import com.esri.ags.portal.PopUpRenderer;
+			import com.esri.ags.portal.supportClasses.PopUpInfo;
+			import com.esri.ags.portal.supportClasses.PopUpMediaInfo;
+			import com.esri.ags.renderers.SimpleRenderer;
+			import com.esri.ags.symbols.PictureMarkerSymbol;
+			import com.esri.ags.symbols.SimpleFillSymbol;
+			import com.esri.ags.symbols.SimpleLineSymbol;
+			import com.esri.ags.symbols.SimpleMarkerSymbol;
+			import com.esri.ags.symbols.Symbol;
+			import com.esri.ags.tasks.supportClasses.Query;
+			import com.esri.viewer.AppEvent;
+			import com.esri.viewer.components.SearchEditorPopUpRenderer;
+			import com.esri.viewer.components.SearchPopUpRenderer;
+			import com.esri.viewer.utils.ErrorMessageUtil;
+			import com.esri.viewer.utils.SymbolParser;
+			
+			import mx.collections.ArrayCollection;
+			import mx.controls.Alert;
+			import mx.events.CloseEvent;
+			import mx.events.FlexEvent;
+			import mx.managers.PopUpManager;
+			import mx.rpc.AsyncResponder;
+			import mx.rpc.events.ResultEvent;
+			import mx.utils.StringUtil;
+			
+			import spark.components.Scroller;
+			import spark.components.TitleWindow;
+			import spark.components.supportClasses.ItemRenderer;
+			import spark.formatters.DateTimeFormatter;
+			
+			import widgets.Custom.CustomTWSkin;
+			import widgets.supportClasses.FeatureSetUtil;
+			import widgets.supportClasses.ResultAttributes;
+			import widgets.supportClasses.ResultItem;
+			
+			//搜索变量
+			private var resultFeatureLayer:FeatureLayer;
+			private var popUpRenderer:SearchPopUpRenderer = new SearchPopUpRenderer();
+			private var editorPopUpRenderer:SearchEditorPopUpRenderer = new SearchEditorPopUpRenderer();
+			
+			[Bindable]
+			private var IndustrysearchResultAC:ArrayCollection;
+			
+			[Bindable]
+			private var EnterpriseSearchResultAC:ArrayCollection;
+			
+			private var resultMarkerSymbol:Symbol;
+			private var resultLineSymbol:Symbol;
+			private var resultFillSymbol:Symbol;
+			private var shareResults:Boolean;
+			
+			private var scallbar:Scroller;
+			
+			private var searchCount:uint = 0;
+			private var configSearchText:Array;
+			private var loadingLabel:String;
+			private var nolayerLabel:String;
+			private var queryLayer:FeatureLayer;
+			private var queryGeom:Geometry;
+			private var queryExpr:String;
+			private var queryFields:XMLList;
+			private var queryTitleField:String;
+			private var queryLinkField:String;
+			private var queryLinkAlias:String;
+			private var querySymbol:Symbol;
+			private var resultsLabel:String;
+			private var selectionLabel:String;
+			private var gFeatureSet:FeatureSet;
+			private var zoomScale:Number = 50000;
+			private var pointSearchTolerance:Number = 6;
+			
+			[Bindable]
+			private var featureLayers:Array;
+			private var SearchText:String;
+			private var SearchConditions:String;
+			public var twTab:TitleWindow;
+			[Bindable]
+			private var userID:String = "";
+			
+			[Bindable]
+			private var typeID:String = "";
+			protected function addEventListenerShowClose_creationCompleteHandler(event:FlexEvent):void
+			{
+				//仅仅进行接收外部事件，下面进行处理
+				AppEvent.addListener("USERMANAGEREVENT",widgetStateChangedHandler);
+				AppEvent.addListener("REGSUCCESS",regSuccessHandler );
+				AppEvent.addListener("PROPERATYCHANGE",properityChangeHandler );
+				AppEvent.addListener("MODIFYPERMISSION",permissionChangeHandler );
+				
+				
+			}
+			
+			private function widgetStateChangedHandler(event:AppEvent):void
+			{
+				/*
+				* OTHER_STATE 表示隐藏
+				* USERMANAGER_STATE 表示刚刚进入UserManager界面的状态
+				* 其他的STATE表示不同的操作状态
+				*/
+				switch (currentState)
+				{
+					case 'USERMANAGER_STATE':
+						currentState = 'OTHER_STATE';
+						break;
+					case 'OTHER_STATE':
+						currentState = 'USERMANAGER_STATE';
+						//跳转状态后进行初始化函数
+						default_creationCompleteHandler();
+						break;
+					default:
+						currentState = 'OTHER_STATE';
+						break;
+				}
+			}
+			
+			/*
+			* 左边菜单的控制 click,  rollover,  rollout
+			* 所有的里面都是通过控制外面的boardcontainer背景颜色
+			*
+			*/
+			private var isUserSelected:Boolean = true;
+			private var isIndustrySelected:Boolean = false;
+			private var isPublicSelected:Boolean = false;
+			private function hideAllMenuColor():void
+			{
+				industryMenuID.setStyle("backgroundColor", 0xfcfcfc);
+				publicMenuID.setStyle("backgroundColor", 0xfcfcfc);
+				userMenuID.setStyle("backgroundColor", 0xfcfcfc);
+			}
+			
+			private function unselectedAll():void
+			{
+				isUserSelected = false;
+				isIndustrySelected = false;
+				isPublicSelected = false;
+				hideAllMenuColor();
+			}
+			protected function industry_clickHandler(event:MouseEvent):void
+			{
+				unselectedAll();
+				isIndustrySelected = true;
+				industryMenuID.setStyle("backgroundColor", 0xf2f2f2);
+				
+				//改变状态，实现跳转
+				this.currentState = "INDUSTRY_STATE";
+			}
+			
+			protected function industryRO_rollOverHandler(event:MouseEvent):void
+			{
+				industryMenuID.setStyle("backgroundColor", 0xf2f2f2);
+				
+			}
+			
+			protected function industryROT_rollOutHandler(event:MouseEvent):void
+			{
+				if(!isIndustrySelected)
+				{
+					industryMenuID.setStyle("backgroundColor", 0xfcfcfc);
+				}
+				
+			}
+			
+			protected function userCLC_clickHandler(event:MouseEvent):void
+			{
+				unselectedAll();
+				isUserSelected = true;
+				userMenuID.setStyle("backgroundColor", 0xf2f2f2);
+				
+				//改变状态，实现跳转
+				this.currentState = "USER_STATE";
+			}
+			
+			protected function userRO_rollOverHandler(event:MouseEvent):void
+			{
+				userMenuID.setStyle("backgroundColor", 0xf2f2f2);
+				
+			}
+			
+			protected function userROT_rollOutHandler(event:MouseEvent):void
+			{
+				if(!isUserSelected)
+				{
+					userMenuID.setStyle("backgroundColor", 0xfcfcfc);
+				}
+				
+			}
+			
+			protected function publicCLC_clickHandler(event:MouseEvent):void
+			{
+				unselectedAll();
+				isPublicSelected = true;
+				publicMenuID.setStyle("backgroundColor", 0xf2f2f2);
+				
+				//改变状态，实现跳转
+				this.currentState = "PUBLIC_STATE";
+			}
+			
+			protected function publicRO_rollOverHandler(event:MouseEvent):void
+			{
+				publicMenuID.setStyle("backgroundColor", 0xf2f2f2);
+				
+			}
+			
+			protected function publicROT_rollOutHandler(event:MouseEvent):void
+			{
+				if(!isPublicSelected)
+				{
+					publicMenuID.setStyle("backgroundColor", 0xfcfcfc);
+				}
+				
+			}
+			
+			
+			/*
+			* 用户管理操作：包含添加、修改、删除、搜索
+			*
+			*/
+			[Bindable]
+			public var curType:String = "2";
+			private var users:ArrayCollection;
+		
+			protected function getUsersHandler(event:ResultEvent):void
+			{
+				users = new ArrayCollection();
+				var s:String = event.result.toString();
+				var xml:XML = new XML(s);
+				
+				var userList:XMLList = xml..user;
+				for (var i:int = 0; i < userList.length(); i++)
+				{
+					var tid:String = userList[i].id;
+					var tusername:String = userList[i].username;
+					var tpsw:String = userList[i].psw;
+					var tusertype:String = getTypeName(userList[i].usertype);
+					
+					var tuserrealname:String = userList[i].userrealname;
+					var tuserdep:String = userList[i].userdep;
+					var tusertel:String = userList[i].usertel;
+					var tusermail:String = userList[i].usermail;
+					
+					users.addItem({id:tid,username:tusername,psw:tpsw,usertype:tusertype,
+								   userrealname:tuserrealname,userdep:tuserdep,
+								   usertel:tusertel,usermail:tusermail});
+				}
+				
+				AuthorityDG.dataProvider = users;
+				
+				function getTypeName(id:String):String
+				{
+					var name:String = "";
+					if(id=="1"){
+						name = "管理员";
+					}else if(id=="2"){
+						name = "普通用户";
+					}
+					
+					return name;
+				}
+			}
+			
+			protected function default_creationCompleteHandler():void
+			{
+				this.currentState = "USER_STATE";
+				getUsers.send();
+				twTab = new TitleWindow();
+				twTab.setStyle("skinClass", CustomTWSkin);
+				twTab.setStyle("borderColor", 0x5aaeec);
+				
+				searchCount = 0;
+				searchByCustom(0);
+				searchByCustom(1);
+			}
+			
+			
+			private function lfRowNum(item:Object, column:GridColumn):String
+			{
+				var iIndex:int = users.getItemIndex(item) + 1;
+				
+				return String(iIndex);
+			}
+			
+			private function industrylfRowNum(item:Object, column:GridColumn):String
+			{
+				var iIndex:int = IndustrysearchResultAC.getItemIndex(item) + 1;
+				
+				return String(iIndex);
+			}
+			
+			private function enterpriselfRowNum(item:Object, column:GridColumn):String
+			{
+				var iIndex:int = EnterpriseSearchResultAC.getItemIndex(item) + 1;
+				
+				return String(iIndex);
+			}
+			
+			protected function userSearchClear_clickHandler(event:MouseEvent):void
+			{
+				UserSearchConditionTXT.text = "";
+			}
+			
+			protected function userSearch_clickHandler(event:MouseEvent):void
+			{
+				var arr:Array = [];
+				
+				for each(var o:Object in AuthorityDG.dataProvider)
+				{
+					arr.push(o["username"]);
+				}
+				//该搜索功能只实现单个搜索，没有实现搜索集，不能进行多项匹配
+				var searchDGI:SearchDataGridItem = new SearchDataGridItem(arr,UserSearchConditionTXT.text);
+				var resIndex:int = searchDGI.search();
+				AuthorityDG.selectedIndex = resIndex;
+			}
+			
+			protected function UserSearchConditionTXT_focusInHandler(event:FocusEvent):void
+			{
+				UserSearchConditionTXT.text = "";
+				UserSearchConditionTXT.setStyle("color",0x000000);
+			}
+			
+			protected function UserSearchConditionTXT_enterHandler(event:FlexEvent):void
+			{
+				userSearch_clickHandler(null);
+			}
+			
+			protected function UserSearchConditionTXT_focusOutHandler(event:FocusEvent):void
+			{
+				UserSearchConditionTXT.text = "请输入用户名";
+				UserSearchConditionTXT.setStyle("color",0xe6e6e6);
+			}
+			
+			public function dataGridItemEdit_clickHandler(event:MouseEvent):void
+			{
+				mx.controls.Alert.show("编辑该行");
+			}
+			
+			public function dataGridItemGrant_clickHandler(event:MouseEvent):void
+			{
+				twTab.title = "权限修改";
+				
+				twTab.width=310;
+				twTab.height=250;
+				
+				twTab.removeAllElements();
+				twTab.addElement(new ModifyPermission());
+				
+				PopUpManager.addPopUp(twTab,this,false);
+				PopUpManager.centerPopUp(twTab);
+				twTab.addEventListener(CloseEvent.CLOSE,titlewindow1_closeHandler);
+				
+				userID = AuthorityDG.dataProvider.getItemAt(AuthorityDG.selectedIndex)["id"];
+			}
+			
+			private var delSelectedIndex:int = -1;
+			public function dataGridItemDelete_clickHandler(event:MouseEvent):void
+			{
+				delSelectedIndex = AuthorityDG.selectedIndex;
+				Alert.show("确定要删除此用户吗?", "删除确认", Alert.YES|Alert.NO, this,deleteUser,null,Alert.NO);
+			}
+			
+			private function deleteUser(event:CloseEvent):void
+			{
+				if(event.detail == Alert.YES)
+				{
+					userID = AuthorityDG.dataProvider.getItemAt(delSelectedIndex)["id"];
+					AuthorityDG.dataProvider.removeItemAt(AuthorityDG.selectedIndex);
+					
+					//执行服务器删除数据操作
+					delUser.send();
+				}
+				
+			}
+			
+			protected function addUser_clickHandler(event:MouseEvent):void
+			{
+				twTab.title = "用户注册";
+				
+				twTab.width=390;
+				twTab.height=510;
+				
+				twTab.removeAllElements();
+				twTab.addElement(new RegisterUser());
+				
+				PopUpManager.addPopUp(twTab,this,false);
+				PopUpManager.centerPopUp(twTab);
+				twTab.addEventListener(CloseEvent.CLOSE,titlewindow1_closeHandler);
+			}
+			
+			protected function titlewindow1_closeHandler(event:CloseEvent):void
+			{
+				twTab.removeEventListener(CloseEvent.CLOSE,titlewindow1_closeHandler);
+				PopUpManager.removePopUp(twTab);
+			}
+			
+			
+			//搜索操作开始
+			
+			private function widgetConfigLoadedHandler():void
+			{
+				if (configXML)
+				{
+					
+					shareResults = true;
+					
+					var symbolParser:SymbolParser = new SymbolParser();
+					
+					configSearchText = [];
+					var lyrList:XMLList = configXML..layer;
+					for (var i:int = 0; i < lyrList.length(); i++)
+					{
+						var lyrURL:String = lyrList[i].url;
+						var lyrLabel:String = lyrList[i].name;
+						var lyrExpr:String = lyrList[i].expression;
+						var lyrFields:XMLList = lyrList[i].fields;
+						var lyrTitleField:String = lyrList[i].titlefield;
+						var lyrLinkField:String = lyrList[i].linkfield;
+						var lyrSymbol:Symbol = symbolParser.parseSymbol(lyrList[i].symbol[0]);
+						var linkAlias:String = lyrList[i].linkfield.@alias[0];
+						var useAMF:String = lyrList[i].useamf;
+						var useProxy:Boolean = lyrList[i].useproxy[0] && lyrList[i].useproxy == "true";
+						
+						const orderByFieldsText:String = lyrList[i].orderbyfields[0];
+						var lyrOrderByFields:Array;
+						if (orderByFieldsText)
+						{
+							lyrOrderByFields = orderByFieldsText.split(',');
+						}
+						
+						var layer:FeatureLayer = new FeatureLayer();
+						layer.addEventListener(LayerEvent.LOAD, searchLayer_loadHandler);
+						layer.addEventListener(LayerEvent.LOAD_ERROR, searchLayer_faultHandler);
+						layer.url = lyrURL;
+						layer.name = buildLayerName(lyrLabel);
+						
+						if (useProxy && configData.proxyUrl)
+						{
+							layer.proxyURL = configData.proxyUrl;
+						}
+						if (useAMF)
+						{
+							layer.useAMF = useAMF == "true";
+						}
+						if (lyrFields && lyrFields[0].@all[0] == "true")
+						{
+							layer.outFields = [ "*" ];
+						}
+						else if (lyrFields)
+						{
+							var fields:XMLList = lyrFields.field;
+							layer.outFields = [];
+							for each (var fieldXML:XML in fields)
+							{
+								if (fieldXML.@name[0])
+								{
+									layer.outFields.push(fieldXML.@name[0]);
+								}
+							}
+						}
+						
+						var searchLayer:Object =
+							{
+								layer: layer,
+								label: lyrLabel,
+								expr: lyrExpr,
+								fields: lyrFields,
+								orderbyfields: lyrOrderByFields,
+								titlefield: lyrTitleField,
+								linkfield: lyrLinkField,
+								linkalias: linkAlias,
+								symbol: lyrSymbol
+							};
+						
+						if (lyrExpr)
+						{
+							configSearchText.push(searchLayer);
+						}
+					}
+					
+					const resultMarkerSymbolURL:String = configXML.symbols.picturemarkersymbol.@url || widgetIcon;
+					const parsedResultMarkerSymbolHeight:Number = parseFloat(configXML.symbols.picturemarkersymbol.@height[0]);
+					const resultMarkerSymbolHeight:Number = isNaN(parsedResultMarkerSymbolHeight) ? 0 : parsedResultMarkerSymbolHeight;
+					const parsedResultMarkerSymbolWidth:Number = parseFloat(configXML.symbols.picturemarkersymbol.@width[0]);
+					const resultMarkerSymbolWidth:Number = isNaN(parsedResultMarkerSymbolWidth) ? 0 : parsedResultMarkerSymbolWidth;
+					const resultMarkerSymbolXOffset:Number = (configXML.symbols.picturemarkersymbol.@xoffset != null) ? configXML.symbols.picturemarkersymbol.@xoffset : 0;
+					const resultMarkerSymbolYOffset:Number = (configXML.symbols.picturemarkersymbol.@yoffset != null) ? configXML.symbols.picturemarkersymbol.@yoffset : 0;
+					resultMarkerSymbol = new PictureMarkerSymbol(resultMarkerSymbolURL, resultMarkerSymbolWidth, resultMarkerSymbolHeight, resultMarkerSymbolXOffset, resultMarkerSymbolYOffset);
+					
+					const resultLineSymbolColor:uint = (configXML.symbols.simplelinesymbol.@color[0] != null) ? configXML.symbols.simplelinesymbol.@color : 0xFF0000;
+					const resultLineSymbolAlpha:Number = (configXML.symbols.simplelinesymbol.@alpha[0] != null) ? configXML.symbols.simplelinesymbol.@alpha : 0.8;
+					const resultLineSymbolWidth:Number = (configXML.symbols.simplelinesymbol.@width[0] != null) ? configXML.symbols.simplelinesymbol.@width : 2;
+					resultLineSymbol = new SimpleLineSymbol(SimpleLineSymbol.STYLE_SOLID, resultLineSymbolColor, resultLineSymbolAlpha, resultLineSymbolWidth);
+					
+					const resultFillSymbolColor:uint = (configXML.symbols.simplefillsymbol.@color[0] != null) ? configXML.symbols.simplefillsymbol.@color : 0xFF0000;
+					const resultFillSymbolAlpha:Number = (configXML.symbols.simplefillsymbol.@alpha[0] != null) ? configXML.symbols.simplefillsymbol.@alpha : 0.5;
+					const resultFillSymbolOutlineColor:uint = (configXML.symbols.simplefillsymbol.outline.@color[0] != null) ? configXML.symbols.simplefillsymbol.outline.@color : 0xFF0000;
+					const resultFillSymbolOutlineAlpha:Number = (configXML.symbols.simplefillsymbol.outline.@alpha[0] != null) ? configXML.symbols.simplefillsymbol.outline.@alpha : 0.8;
+					const resultFillSymbolOutlineWidth:Number = (configXML.symbols.simplefillsymbol.outline.@width[0] != null) ? configXML.symbols.simplefillsymbol.outline.@width : 2;
+					resultFillSymbol = new SimpleFillSymbol(SimpleFillSymbol.STYLE_SOLID, resultFillSymbolColor, resultFillSymbolAlpha, new SimpleLineSymbol(SimpleLineSymbol.STYLE_SOLID, resultFillSymbolOutlineColor, resultFillSymbolOutlineAlpha, resultFillSymbolOutlineWidth));
+					
+					resultFeatureLayer = new FeatureLayer();
+					resultFeatureLayer.visible = false;
+					resultFeatureLayer.isEditable = false;
+					
+					resultFeatureLayer.addEventListener(FlexEvent.HIDE, resultFeatureLayer_hideHandler);
+					
+					var userTolerance:Number = configXML.tolerance;
+					if (userTolerance > 0)
+					{
+						pointSearchTolerance = userTolerance;
+					}
+					
+					if (Number(configXML.zoomscale) > 0)
+					{
+						zoomScale = Number(configXML.zoomscale);
+					}
+				}
+			}
+			
+			private function resultFeatureLayer_hideHandler(event:FlexEvent):void
+			{
+				hideInfoWindow();
+			}
+			
+			private function hideInfoWindow():void
+			{
+				if (map.infoWindow.contentOwner &&
+					((map.infoWindow.contentOwner is Graphic && Graphic(map.infoWindow.contentOwner).graphicsLayer === resultFeatureLayer) || map.infoWindow.contentOwner is Map))
+				{
+					map.infoWindow.hide();
+				} 
+			}
+			private function buildLayerName(name:String):String
+			{
+				var widgetName:String = configXML.layername || widgetTitle;
+				name = name ? name : widgetName;
+				
+				if (widgetName == name)
+				{
+					return shareResults ? widgetName : "hiddenLayer_" + widgetName;
+				}
+				
+				var layerNameTemplate:String = "{0} - {1}";
+				
+				layerNameTemplate =
+					shareResults ? layerNameTemplate : "hiddenLayer_" + layerNameTemplate;
+				
+				return StringUtil.substitute(layerNameTemplate, widgetName, name);
+			}
+			private function searchLayer_loadHandler(event:LayerEvent):void
+			{
+				var layer:FeatureLayer = event.layer as FeatureLayer;
+				layer.removeEventListener(LayerEvent.LOAD, searchLayer_loadHandler);
+				layer.removeEventListener(LayerEvent.LOAD_ERROR, searchLayer_faultHandler);
+				
+				layer.layerDetails.minScale = 0; // removing scale dependency
+				layer.layerDetails.maxScale = 0;
+			}
+			
+			private function searchLayer_faultHandler(event:LayerEvent):void
+			{
+				var layer:FeatureLayer = event.currentTarget as FeatureLayer;
+				
+				layer.removeEventListener(LayerEvent.LOAD, searchLayer_loadHandler);
+				layer.removeEventListener(LayerEvent.LOAD_ERROR, searchLayer_faultHandler);
+				
+				showLoadErrorMessage(event);
+			}
+			
+			
+			private function searchByCustom(o:int):void
+			{
+				//hideInfoWindow();  清除所有的搜索标记
+				if(configSearchText.length<=0)
+					return;
+				var searchLayer:Object = configSearchText[o];
+				
+				queryLayer = searchLayer.layer;
+				
+				if (queryLayer && !queryLayer.loaded)
+				{
+					queryLayer.addEventListener(LayerEvent.LOAD, queryLayer_loadHandler);
+					queryLayer.addEventListener(LayerEvent.LOAD_ERROR, queryLayer_loadErrorHandler);
+					
+					function queryLayer_loadHandler(event:LayerEvent):void
+					{
+						queryLayer.removeEventListener(LayerEvent.LOAD, queryLayer_loadHandler);
+						queryLayer.removeEventListener(LayerEvent.LOAD_ERROR, queryLayer_loadErrorHandler);
+						
+						searchByCustom(o);
+					}
+					
+					function queryLayer_loadErrorHandler(event:LayerEvent):void
+					{
+						queryLayer.removeEventListener(LayerEvent.LOAD, queryLayer_loadHandler);
+						queryLayer.removeEventListener(LayerEvent.LOAD_ERROR, queryLayer_loadErrorHandler);
+						
+						showLoadErrorMessage(event);
+					}
+					
+					return;
+				}
+				
+				queryExpr = searchLayer.expr;
+				queryFields = searchLayer.fields;
+				queryTitleField = searchLayer.titlefield;
+				queryLinkField = searchLayer.linkfield;
+				queryLinkAlias = searchLayer.linkalias;
+				querySymbol = searchLayer.symbol;
+				
+				if (queryLayer)
+				{
+					var expr:String;
+					
+					expr = "";
+					
+					var query:Query = new Query();
+					
+					query.where = "1 = 1";//为空表示搜索所有指定值
+					query.outSpatialReference = map.spatialReference;
+					
+					const supportsServerSideSorting:Boolean = queryLayer.layerDetails
+						&& queryLayer.layerDetails.version >= 10.1
+						&& queryLayer.layerDetails.supportsAdvancedQueries;
+					const orderByFields:Array = searchLayer.orderbyfields;
+					if (supportsServerSideSorting && orderByFields)
+					{
+						query.orderByFields = orderByFields;
+					}
+					
+					
+					var queryOptions:Object =
+						{
+							supportsServerSideSorting: supportsServerSideSorting,
+							orderByFields: orderByFields,
+							queryFields: queryFields
+						};
+					
+
+					queryLayer.queryFeatures(
+						query, new AsyncResponder(queryFeatures_resultHandler,
+							queryFeatures_faultHandler,
+							queryOptions));
+					
+				}
+			}
+			
+			private function showLoadErrorMessage(event:LayerEvent):void
+			{
+				var errorMessage:String = getDefaultString("layerFailedToLoad",
+					event.layer.name,
+					ErrorMessageUtil.makeHTMLSafe(ErrorMessageUtil.buildFaultMessage(event.fault)));
+				
+				showError(errorMessage);
+			}
+			
+			
+			
+			private function queryFeatures_resultHandler(featureSet:FeatureSet, queryOptions:Object):void
+			{
+				try
+				{
+					if (!queryOptions.supportsServerSideSorting && queryOptions.orderByFields)
+					{
+						FeatureSetUtil.sortFeaturesByFieldName(featureSet, queryOptions.orderByFields);
+					}
+					if(searchCount == 1){
+						IndustrysearchResultAC= new ArrayCollection(featureSet.attributes);
+					}else if(searchCount == 0){
+						EnterpriseSearchResultAC= new ArrayCollection(featureSet.attributes);	
+					}
+					searchCount++;
+				}
+				catch (error:Error)
+				{
+					//showMessage(error.message, false);
+				}
+				
+			}
+			
+			
+			
+			private function queryFeatures_faultHandler(info:Object, queryOptions:Object):void
+			{
+				//showMessage(info.toString(), false);
+			}
+			private function widgetClosedHandler(event:Event):void
+			{
+				for each (var featureLayer:FeatureLayer in featureLayers)
+				{
+					featureLayer.clearSelection();
+				}
+			}
+
+			private var file:FileReference;
+			protected function exportFile_clickHandler(event:MouseEvent):void
+			{
+				
+				var byte:ByteArray =new ByteArray();
+				byte.writeMultiByte(exportToCSV(EnterpriseSearchResultAC),"gb2312");
+				file.save(byte,"公众聚集场所.csv");
+			}
+		
+			private  function exportToCSV(ac:ArrayCollection):String
+			{
+				var allStr:String = ""+
+					"企业名称"     +","+
+					"生产经营地址"  +","+ 
+					"法定代表人"   +","+ 
+					"法人电话"    +","+ 
+					"联系人"      +","+
+					"联系人电话"   +","+ 
+					"行业类别"    +","+ 
+					"成立日期"    +","+ 
+					"经营范围"    +","+ 
+					"经营场所面积" +","+  
+					"从业人数"    +","+ 
+					"安全类别"    +","+ 
+					"安全等级"    +","+ 
+					"检查频次"    +","+ 
+					"所属社区"    +","+ 
+					"网格"       +","+
+					"网格管理员"   +","+ 
+					"消防警"     +","+ 
+					"监管单位"   +","+  
+					"监管人"+"\r\n";      
+				file = new FileReference();
+				
+				
+				
+				for each(var ir:Object in ac)
+				{
+					var rowStr:String = (ir["企业名称"    ]?ir["企业名称"    ]:"") +"," +    
+						(ir["生产经营地址" ] ?ir["生产经营地址" ] :"") +"," +    
+						(ir["法定代表人"   ] ?ir["法定代表人"   ]:"") +"," +
+						(ir["法人电话"    ]  ?ir["法人电话"    ]:"") +"," +
+						(ir["联系人"     ]  ?ir["联系人"     ]:"")  +"," +
+						(ir["联系人电话"   ] ?ir["联系人电话"   ]:"") +"," +
+						(ir["行业类别"    ] ?ir["行业类别"    ]:"")  +"," +
+						(ir["成立日期"    ] ?ir["成立日期"    ]:"")  +"," +
+						(ir["经营范围"    ] ?ir["经营范围"    ]:"")  +"," +
+						(ir["经营场所面积"  ]?ir["经营场所面积"  ]:"") +"," +
+						(ir["从业人数"    ] ?ir["从业人数"    ]:"")  +"," +
+						(ir["安全类别"    ] ?ir["安全类别"    ]:"")  +"," +
+						(ir["安全等级"    ] ?ir["安全等级"    ]:"")  +"," +
+						(ir["检查频次"    ] ?ir["检查频次"    ]:"")  +"," +
+						(ir["所属社区"    ] ?ir["所属社区"    ]:"")  +"," +
+						(ir["网格"      ]  ?ir["网格"      ] :"")  +"," +
+						(ir["网格管理员"   ] ?ir["网格管理员"   ]:"") +"," +
+						(ir["消防警"     ] ? ir["消防警"     ]:"")  +"," +
+						(ir["监管单位"    ] ?ir["监管单位"    ]:"")  +"," +
+						(ir["监管人"     ]?ir["监管人"     ]:"");
+					var newText:String = rowStr.replace(/[\r\n]+/g, " ");
+					newText +="\r\n"
+					allStr += newText;
+				}
+				
+		
+				return allStr;
+			} 
+			
+			protected function IndustryExport_clickHandler(event:MouseEvent):void
+			{
+				var byte:ByteArray =new ByteArray();
+				byte.writeMultiByte(exportToCSV(IndustrysearchResultAC),"gb2312");
+				file.save(byte,"工业企业.csv");
+			}
+			
+			
+			/* protected function userSearchClear_clickHandler(event:MouseEvent):void
+			{
+				UserSearchConditionTXT.text = "";
+			}
+			
+			protected function userSearch_clickHandler(event:MouseEvent):void
+			{
+				var arr:Array = [];
+				
+				for each(var o:Object in AuthorityDG.dataProvider)
+				{
+					arr.push(o["username"]);
+				}
+				//该搜索功能只实现单个搜索，没有实现搜索集，不能进行多项匹配
+				var searchDGI:SearchDataGridItem = new SearchDataGridItem(arr,UserSearchConditionTXT.text);
+				var resIndex = searchDGI.search();
+				AuthorityDG.selectedIndex = resIndex;
+			}
+			
+			protected function UserSearchConditionTXT_focusInHandler(event:FocusEvent):void
+			{
+				UserSearchConditionTXT.text = "";
+				UserSearchConditionTXT.setStyle("color",0x000000);
+			}
+			
+			protected function UserSearchConditionTXT_enterHandler(event:FlexEvent):void
+			{
+				userSearch_clickHandler(null);
+			}
+			
+			protected function UserSearchConditionTXT_focusOutHandler(event:FocusEvent):void
+			{
+				UserSearchConditionTXT.text = "请输入用户名";
+				UserSearchConditionTXT.setStyle("color",0xe6e6e6);
+			} */
+			protected function EnterpriseSearchConditionTXT_enterHandler(event:FlexEvent):void
+			{
+				EnterpriseSearch_clickHandler(null);
+			}
+			
+			protected function EnterpriseSearchConditionTXT_focusInHandler(event:FocusEvent):void
+			{
+				EnterpriseSearchConditionTXT.text = "";
+				EnterpriseSearchConditionTXT.setStyle("color",0x000000);
+			}
+			
+			protected function EnterpriseSearchConditionTXT_focusOutHandler(event:FocusEvent):void
+			{
+				EnterpriseSearchConditionTXT.text = "请输入用户名";
+				EnterpriseSearchConditionTXT.setStyle("color",0xe6e6e6);
+			}
+			
+			protected function EnterpriseSearch_clickHandler(event:MouseEvent):void
+			{
+				var arr:Array = [];
+				
+				for each(var o:Object in EnterpriseDG.dataProvider)
+				{
+					arr.push(o["企业名称"]);
+				}
+				//该搜索功能只实现单个搜索，没有实现搜索集，不能进行多项匹配
+				var searchDGI:SearchDataGridItem = new SearchDataGridItem(arr,EnterpriseSearchConditionTXT.text);
+				var resIndex:int = searchDGI.search();
+				EnterpriseDG.selectedIndex = resIndex;
+				
+			}
+			
+			protected function EnterpriceClear_clickHandler(event:MouseEvent):void
+			{
+				EnterpriseSearchConditionTXT.text = "";
+			}
+			
+			protected function IndustryClear_clickHandler(event:MouseEvent):void
+			{
+				IndustrySearchConditionTXT.text = "";
+			}
+			
+			protected function IndustrySearch_clickHandler(event:MouseEvent):void
+			{
+				var arr:Array = [];
+				
+				for each(var o:Object in IndustryDG.dataProvider)
+				{
+					arr.push(o["企业名称"]);
+				}
+				//该搜索功能只实现单个搜索，没有实现搜索集，不能进行多项匹配
+				var searchDGI:SearchDataGridItem = new SearchDataGridItem(arr,IndustrySearchConditionTXT.text);
+				var resIndex:int = searchDGI.search();
+				IndustryDG.selectedIndex = resIndex;
+			}
+			
+			protected function IndustrySearchConditionTXT_focusOutHandler(event:FocusEvent):void
+			{
+				IndustrySearchConditionTXT.text = "请输入用户名";
+				IndustrySearchConditionTXT.setStyle("color",0xe6e6e6);
+			}
+			
+			protected function IndustrySearchConditionTXT_focusInHandler(event:FocusEvent):void
+			{
+				IndustrySearchConditionTXT.text = "";
+				IndustrySearchConditionTXT.setStyle("color",0x000000);
+			}
+			
+			protected function IndustrySearchConditionTXT_enterHandler(event:FlexEvent):void
+			{
+				IndustrySearch_clickHandler(null);
+			}
+			
+			private function regSuccessHandler(event:AppEvent):void
+			{
+				twTab.removeEventListener(CloseEvent.CLOSE,titlewindow1_closeHandler);
+				PopUpManager.removePopUp(twTab);
+				AppEvent.dispatch("PROPERATYCHANGE");
+			}
+			
+			protected function changeUsersHandler(event:ResultEvent):void
+			{
+				AppEvent.dispatch("PROPERATYCHANGE");
+			}
+			
+			private function properityChangeHandler(event:AppEvent):void
+			{
+				default_creationCompleteHandler();
+			}
+			
+			private function permissionChangeHandler(event:AppEvent):void
+			{
+				typeID = event.data.toString();
+				twTab.removeEventListener(CloseEvent.CLOSE,titlewindow1_closeHandler);
+				PopUpManager.removePopUp(twTab);	
+				modifyUser.send();
+			}
+			
+		]]>
+	</fx:Script>
+	<fx:Declarations>
+		<s:HTTPService id="getUsers" method="POST" result="getUsersHandler(event)" resultFormat="xml"
+					   url="http://113.108.119.116:8081/phpsrc/usermanage.php" useProxy="false">          
+		</s:HTTPService>
+		
+		<s:HTTPService id="delUser" method="POST" result="changeUsersHandler(event)" resultFormat="xml"
+					   url="http://113.108.119.116:8081/phpsrc/deluser.php" useProxy="false">
+			<mx:request xmlns=""> 
+				<userid>{userID}</userid>
+			</mx:request>  
+		</s:HTTPService> 
+		
+		<s:HTTPService id="modifyUser" method="POST" result="changeUsersHandler(event)" resultFormat="xml"
+					   url="http://113.108.119.116:8081/phpsrc/modifyuser.php" useProxy="false">
+			<mx:request xmlns=""> 
+				<userid>{userID}</userid>
+				<typeid>{typeID}</typeid>
+			</mx:request>  
+		</s:HTTPService> 
+	</fx:Declarations>
+	<viewer:states>
+		<!--隐藏状态-->
+		<s:State name="OTHER_STATE"/>
+		<!--刚进入状态-->
+		<s:State name="USERMANAGER_STATE"/>
+		<!--默认操作状态-->
+		<s:State name="USER_STATE"/>
+		<s:State name="INDUSTRY_STATE"/>
+		<s:State name="PUBLIC_STATE"/>	
+	</viewer:states>
+	<s:BorderContainer excludeFrom="OTHER_STATE" width="100%" height="100%" borderVisible="false">
+		<s:layout>
+			<s:HorizontalLayout gap="10"/>
+		</s:layout>
+	<s:BorderContainer id="lPnlWidget" width="210" height="100%" backgroundColor="#FFFFFF"
+					   borderColor="#dbdbdb">
+		<s:layout>
+			<s:VerticalLayout gap="0"/>
+		</s:layout>
+		<s:BorderContainer width="100%" height="48"
+						   backgroundImage="assets/images/images/manageBG.png"
+						   backgroundImageFillMode="repeat" borderVisible="false">
+			<s:Image width="207" height="48" source="assets/images/images/manage.png"/>
+		</s:BorderContainer>
+		<!--左边菜单-->
+		<s:BorderContainer width="100%" height="100%" backgroundColor="#ffffff" borderVisible="false">
+			<s:layout>
+				<s:VerticalLayout gap="0"/>
+			</s:layout>
+			
+			
+			<s:BorderContainer id="userMenuID" width="100%" height="40" backgroundColor="#f2f2f2"
+							   borderVisible="false">
+				<s:layout>
+					<s:HorizontalLayout gap="5" paddingLeft="40" verticalAlign="middle"/>
+				</s:layout>
+				<s:Image source="assets/images/images/userLogo.png"/>
+				<s:Label width="100%" height="40" buttonMode="true"
+						 click="userCLC_clickHandler(event)" rollOut="userROT_rollOutHandler(event)"
+						 rollOver="userRO_rollOverHandler(event)" text="用户管理" textAlign="left"
+						 verticalAlign="middle"/>
+			</s:BorderContainer>
+			
+			<s:Line width="100%">
+				<s:stroke>
+					<s:SolidColorStroke color="#e6e6e6" weight="1"/>
+				</s:stroke>
+			</s:Line>
+			
+			
+			<s:BorderContainer id="industryMenuID" width="100%" height="40" backgroundColor="#fcfcfc"
+							   borderVisible="false">
+				<s:layout>
+					<s:HorizontalLayout gap="5" paddingLeft="40" verticalAlign="middle"/>
+				</s:layout>
+				<s:Image source="assets/images/images/industryLogo.png"/>
+				<s:Label width="100%" height="40" buttonMode="true"
+						 click="industry_clickHandler(event)"
+						 rollOut="industryROT_rollOutHandler(event)"
+						 rollOver="industryRO_rollOverHandler(event)" text="工业企业管理" textAlign="left"
+						 verticalAlign="middle"/>
+			</s:BorderContainer>
+			
+			<s:Line width="100%">
+				<s:stroke>
+					<s:SolidColorStroke color="#e6e6e6" weight="1"/>
+				</s:stroke>
+			</s:Line>
+			
+			
+			<s:BorderContainer id="publicMenuID" width="100%" height="40" backgroundColor="#fcfcfc"
+							   borderVisible="false">
+				<s:layout>
+					<s:HorizontalLayout gap="5" paddingLeft="40" verticalAlign="middle"/>
+				</s:layout>
+				<s:Image source="assets/images/images/publicLogo.png"/>
+				<s:Label width="100%" height="40" buttonMode="true"
+						 click="publicCLC_clickHandler(event)"
+						 rollOut="publicROT_rollOutHandler(event)"
+						 rollOver="publicRO_rollOverHandler(event)" text="公众聚集管理" textAlign="left"
+						 verticalAlign="middle"/>
+			</s:BorderContainer>
+			<s:Line width="100%">
+				<s:stroke>
+					<s:SolidColorStroke color="#e6e6e6" weight="1"/>
+				</s:stroke>
+			</s:Line>
+		</s:BorderContainer>
+	</s:BorderContainer >	
+		
+	<!--管理菜单 -->
+	<s:BorderContainer width="100%" height="100%" borderVisible="false">
+		<s:layout>
+			<s:BasicLayout/>
+		</s:layout>
+		<s:Line x="0" y="0" height="100%">
+			<s:stroke>
+				<s:SolidColorStroke color="#dbdbdb" weight="2"/>
+			</s:stroke>
+		</s:Line>
+		<!--用户管理内容界面-->
+		<s:BorderContainer includeIn="USER_STATE" width="100%" height="100%" borderVisible="false"
+						   itemCreationPolicy="immediate">
+			<s:layout>
+				<s:VerticalLayout gap="0"/>
+			</s:layout>
+			<!--设置搜索和添加用户-->
+			<s:BorderContainer width="100%" height="50" backgroundColor="#F2F2F2"
+							   borderVisible="false">
+				<s:layout>
+					<s:BasicLayout/>
+				</s:layout>
+				<s:BorderContainer left="10" backgroundColor="#F2F2F2" borderVisible="false">
+					<s:Image x="0" y="8" source="assets/images/images/userSearch.png"/>
+					<s:TextInput id="UserSearchConditionTXT" x="56" y="12" width="134" height="26"
+								 borderColor="#d2d2d2" borderVisible="true" color="#e6e6e6"
+								 enter="UserSearchConditionTXT_enterHandler(event)"
+								 focusIn="UserSearchConditionTXT_focusInHandler(event)"
+								 focusOut="UserSearchConditionTXT_focusOutHandler(event)"
+								 fontSize="12" text="请输入用户名"/>	
+					<!--搜索-->
+					<s:Label x="194" y="10" width="65" height="28" buttonMode="true"
+							 click="userSearch_clickHandler(event)" text=""/>
+					<!--取消-->
+					<s:Label x="264" y="12" width="65" height="28" buttonMode="true"
+							 click="userSearchClear_clickHandler(event)" text=""/>
+				</s:BorderContainer>
+						
+				<s:Image y="9" right="10" source="assets/images/images/addUser.jpg"/>
+				<!--添加用户-->
+				<s:Label y="10" right="10" width="87" height="27" buttonMode="true"
+						 click="addUser_clickHandler(event)"/>
+			</s:BorderContainer>
+			<s:DataGrid id="AuthorityDG" width="100%" height="100%"
+						alternatingRowColors="[0xffffff,0xf8f9fd]" borderVisible="false"
+						skinClass="widgets.UserManager.DataGridSkin">
+				<s:columns>
+					<s:ArrayList>
+						<s:GridColumn headerText="序号" labelFunction="lfRowNum"></s:GridColumn>
+						<s:GridColumn dataField="username" headerText="用户名"></s:GridColumn>
+						<s:GridColumn dataField="psw" headerText="密码"></s:GridColumn>
+						<s:GridColumn dataField="usertype" headerText="用户类型"></s:GridColumn>
+						<s:GridColumn dataField="userrealname" headerText="用户姓名"></s:GridColumn>
+						<s:GridColumn dataField="userdep" headerText="所属部门"></s:GridColumn>
+						<s:GridColumn dataField="usertel" headerText="联系电话"></s:GridColumn>
+						<s:GridColumn dataField="usermail" headerText="电子邮件"></s:GridColumn>
+						<s:GridColumn headerText="管理">
+							<s:itemRenderer>
+								<fx:Component>
+									<s:GridItemRenderer>
+										
+										<fx:Script>
+											<![CDATA[
+												import mx.events.FlexEvent;
+												import mx.controls.Alert;
+												
+												protected function DataGridManageItemID_creationCompleteHandler(event:FlexEvent):void
+												{
+													var i:int = this.rowIndex;
+
+													const colors:Array = [0xffffff,0xf8f9fd];
+													if (colors && (colors.length > 0))
+													{
+														styleManager.getColorNames(colors); // lazily replace color names with ints
+														DataGridManageItemID.setStyle("backgroundColor", colors[rowIndex % colors.length]);
+														DataGridManageItemChildID.setStyle("backgroundColor", colors[rowIndex % colors.length]);
+													}
+													else
+													{          
+														// This should be the same as bgFill.color.
+														DataGridManageItemID.setStyle("backgroundColor", 0xFFFFFF);
+														DataGridManageItemChildID.setStyle("backgroundColor", 0xFFFFFF);
+													} 
+													
+												}
+												
+											]]>
+										</fx:Script>
+										
+										<s:BorderContainer id="DataGridManageItemID" width="100%"
+														   height="100%" backgroundColor="#ffffff"
+														   borderVisible="false"
+														   creationComplete="DataGridManageItemID_creationCompleteHandler(event)">
+											<s:layout>
+												<s:VerticalLayout horizontalAlign="center"/>
+											</s:layout>
+											
+											<s:BorderContainer id="DataGridManageItemChildID"
+															   height="100%" borderVisible="false">
+												<s:layout>
+													<s:HorizontalLayout gap="10"
+																		verticalAlign="middle"/>
+												</s:layout>
+												
+												<!--<s:Label text="[编辑]"  color="#409cd1" buttonMode="true" fontSize="13" click="this.outerDocument.dataGridItemEdit_clickHandler(event)"/>-->
+												<s:Label buttonMode="true"
+														 click="this.outerDocument.dataGridItemGrant_clickHandler(event)"
+														 color="#409cd1" fontSize="13" text="[分配权限]"/>
+												<s:Label buttonMode="true"
+														 click="this.outerDocument.dataGridItemDelete_clickHandler(event)"
+														 color="#409cd1" fontSize="13" text="[删除]"/>	
+												
+											</s:BorderContainer>	
+										</s:BorderContainer>
+									</s:GridItemRenderer>
+								</fx:Component>
+							</s:itemRenderer>
+						</s:GridColumn>
+					</s:ArrayList>
+				</s:columns>
+			</s:DataGrid>
+			<!--设置Paging-->
+			<!--<s:BorderContainer borderVisible="false" width="100%" height="80" backgroundColor="#ffffff">
+				
+			</s:BorderContainer>-->
+		</s:BorderContainer>
+		
+		<!--工业企业管理内容界面-->
+		<s:BorderContainer includeIn="INDUSTRY_STATE" width="100%" height="100%"
+						   borderVisible="false" itemCreationPolicy="immediate">
+			<s:layout>
+				<s:VerticalLayout gap="0"/>
+			</s:layout>
+			<!--设置搜索和导出文件-->
+			<s:BorderContainer width="100%" height="50" backgroundColor="#F2F2F2"
+							   borderVisible="false">
+				<s:layout>
+					<s:BasicLayout/>
+				</s:layout>
+				<s:BorderContainer left="10" backgroundColor="#F2F2F2" borderVisible="false">
+					<s:Image x="0" y="8" source="assets/images/images/enterpriseSearch.png"/>
+					<s:TextInput id="IndustrySearchConditionTXT" x="56" y="12" width="134"
+								 height="26" borderColor="#d2d2d2" borderVisible="true"
+								 color="#e6e6e6" enter="IndustrySearchConditionTXT_enterHandler(event)"
+								 focusIn="IndustrySearchConditionTXT_focusInHandler(event)"
+								 focusOut="IndustrySearchConditionTXT_focusOutHandler(event)"
+								 fontSize="12" text="请输入企业名称"/>	
+					<!--搜索-->
+					<s:Label x="194" y="10" width="65" height="28" buttonMode="true"
+							 click="IndustrySearch_clickHandler(event)" text=""/>
+					<!--取消-->
+					<s:Label x="264" y="12" width="65" height="28" buttonMode="true"
+							 click="IndustryClear_clickHandler(event)" text=""/>
+				</s:BorderContainer>
+				
+				<s:Image y="9" right="10" source="assets/images/images/export.png"/>
+				<!--导出数据-->
+				<s:Label y="10" right="10" width="77" height="27" buttonMode="true"
+						 click="IndustryExport_clickHandler(event)"/>
+			</s:BorderContainer>
+			<s:DataGrid id="IndustryDG" width="100%" height="100%"
+						alternatingRowColors="[0xffffff,0xf8f9fd]" borderVisible="false"
+						dataProvider="{IndustrysearchResultAC}"
+						skinClass="widgets.UserManager.DataGridSkin">
+				<s:columns>
+					<s:ArrayList>                  
+						<s:GridColumn width="45" headerText="序号" labelFunction="industrylfRowNum"></s:GridColumn>
+						<s:GridColumn width="300" dataField="企业名称" headerText="企业名称"></s:GridColumn>
+						<s:GridColumn width="300" dataField="生产经营地址" headerText="生产经营地址"></s:GridColumn>
+						<s:GridColumn width="90" dataField="法定代表人" headerText="法定代表人"></s:GridColumn>
+						<s:GridColumn width="105" dataField="法人电话" headerText="法人电话"></s:GridColumn>
+						<s:GridColumn width="70" dataField="联系人" headerText="联系人"></s:GridColumn>
+						<s:GridColumn width="105" dataField="联系人电话" headerText="联系电话"></s:GridColumn>
+						<s:GridColumn width="155" dataField="行业类别" headerText="行业类别"></s:GridColumn>
+						<s:GridColumn width="120" dataField="成立日期" headerText="成立日期"></s:GridColumn>
+						<s:GridColumn width="220" dataField="经营范围" headerText="经营范围"></s:GridColumn>
+						<s:GridColumn width="110" dataField="经营场所面积" headerText="经营场所面积"></s:GridColumn>
+						<s:GridColumn width="80" dataField="从业人数" headerText="从业人数"></s:GridColumn>
+						<s:GridColumn width="80" dataField="安全类别" headerText="安全类别"></s:GridColumn>
+						<s:GridColumn width="80" dataField="安全等级" headerText="安全等级"></s:GridColumn>
+						<s:GridColumn width="80" dataField="检查频次" headerText="检查频次"></s:GridColumn>
+						<s:GridColumn width="80" dataField="所属社区" headerText="所属社区"></s:GridColumn>
+						<s:GridColumn width="45" dataField="网格" headerText="网格"></s:GridColumn>
+						<s:GridColumn width="60" dataField="网格管理员" headerText="网格管理员"></s:GridColumn>
+						<s:GridColumn width="80" dataField="消防警" headerText="消防警"></s:GridColumn>
+						<s:GridColumn width="130" dataField="监管单位" headerText="监管单位"></s:GridColumn>
+						<s:GridColumn width="80" dataField="监管人" headerText="监管人"></s:GridColumn>
+					</s:ArrayList>
+				</s:columns> 
+			</s:DataGrid>
+		</s:BorderContainer>
+		
+		<!--公众聚集管理内容界面-->
+		<s:BorderContainer includeIn="PUBLIC_STATE" width="100%" height="100%" borderVisible="false"
+						   itemCreationPolicy="immediate">
+			<s:layout>
+				<s:VerticalLayout gap="0"/>
+			</s:layout>
+			<!--设置搜索和导出文件-->
+			<s:BorderContainer width="100%" height="50" backgroundColor="#F2F2F2"
+							   borderVisible="false">
+				<s:layout>
+					<s:BasicLayout/>
+				</s:layout>
+				<s:BorderContainer left="10" backgroundColor="#F2F2F2" borderVisible="false">
+					<s:Image x="0" y="8" source="assets/images/images/enterpriseSearch.png"/>
+					<s:TextInput id="EnterpriseSearchConditionTXT" x="56" y="12" width="134"
+								 height="26" borderColor="#d2d2d2" borderVisible="true"
+								 color="#e6e6e6" enter="EnterpriseSearchConditionTXT_enterHandler(event)"
+								 focusIn="EnterpriseSearchConditionTXT_focusInHandler(event)"
+								 focusOut="EnterpriseSearchConditionTXT_focusOutHandler(event)"
+								 fontSize="12" text="请输入企业名称"/>	
+					<!--搜索-->
+					<s:Label x="194" y="10" width="65" height="28" buttonMode="true"
+							 click="EnterpriseSearch_clickHandler(event)" text=""/>
+					<!--取消-->
+					<s:Label x="264" y="12" width="65" height="28" buttonMode="true"
+							 click="EnterpriceClear_clickHandler(event)" text=""/>
+				</s:BorderContainer>
+				
+				<s:Image y="9" right="10" source="assets/images/images/export.png"/>
+				<!--导出数据-->
+				<s:Label y="10" right="10" width="77" height="27" buttonMode="true"
+						 click="exportFile_clickHandler(event)"/>
+			</s:BorderContainer>
+			<s:DataGrid id="EnterpriseDG" width="100%" height="100%"
+						alternatingRowColors="[0xffffff,0xf8f9fd]" borderVisible="false"
+						dataProvider="{EnterpriseSearchResultAC}"
+						skinClass="widgets.UserManager.DataGridSkin">
+				<s:columns>
+					<s:ArrayList>                  
+						<s:GridColumn width="45" headerText="序号" labelFunction="enterpriselfRowNum"></s:GridColumn>
+						<s:GridColumn width="300" dataField="企业名称" headerText="企业名称"></s:GridColumn>
+						<s:GridColumn width="300" dataField="生产经营地址" headerText="生产经营地址"></s:GridColumn>
+						<s:GridColumn width="90" dataField="法定代表人" headerText="法定代表人"></s:GridColumn>
+						<s:GridColumn width="105" dataField="法人电话" headerText="法人电话"></s:GridColumn>
+						<s:GridColumn width="70" dataField="联系人" headerText="联系人"></s:GridColumn>
+						<s:GridColumn width="105" dataField="联系人电话" headerText="联系电话"></s:GridColumn>
+						<s:GridColumn width="155" dataField="行业类别" headerText="行业类别"></s:GridColumn>
+						<s:GridColumn width="120" dataField="成立日期" headerText="成立日期"></s:GridColumn>
+						<s:GridColumn width="220" dataField="经营范围" headerText="经营范围"></s:GridColumn>
+						<s:GridColumn width="110" dataField="经营场所面积" headerText="经营场所面积"></s:GridColumn>
+						<s:GridColumn width="80" dataField="从业人数" headerText="从业人数"></s:GridColumn>
+						<s:GridColumn width="80" dataField="安全类别" headerText="安全类别"></s:GridColumn>
+						<s:GridColumn width="80" dataField="安全等级" headerText="安全等级"></s:GridColumn>
+						<s:GridColumn width="80" dataField="检查频次" headerText="检查频次"></s:GridColumn>
+						<s:GridColumn width="80" dataField="所属社区" headerText="所属社区"></s:GridColumn>
+						<s:GridColumn width="45" dataField="网格" headerText="网格"></s:GridColumn>
+						<s:GridColumn width="60" dataField="网格管理员" headerText="网格管理员"></s:GridColumn>
+						<s:GridColumn width="80" dataField="消防警" headerText="消防警"></s:GridColumn>
+						<s:GridColumn width="130" dataField="监管单位" headerText="监管单位"></s:GridColumn>
+						<s:GridColumn width="80" dataField="监管人" headerText="监管人"></s:GridColumn>
+					</s:ArrayList>
+				</s:columns> 
+			</s:DataGrid>
+			
+		</s:BorderContainer>
+	</s:BorderContainer>
+</s:BorderContainer>
+</viewer:BaseWidget>

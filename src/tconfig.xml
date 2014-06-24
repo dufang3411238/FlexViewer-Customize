@@ -1,0 +1,45 @@
+<?xml version="1.0" ?>
+<configuration>
+    <title>南山街道办安全监管系统</title>
+    <logo>assets/images/logo.png</logo>
+    <style>
+        <colors>0x444444,0xebf4ff,0xebf4ff,0xdeebff,0x444444</colors>
+        <alpha>0.8</alpha>
+        <font size="14"/>
+        <titlefont name="微软雅黑"/>
+        <subtitlefont name="Verdana"/>
+    </style>
+    <!-- replace the following url with your own geometryservice -->
+    <geometryservice url="https://utility.arcgisonline.com/arcgis/rest/services/Geometry/GeometryServer"/>
+    <widget url="widgets/Navigation/NavigationWidget.swf" config="widgets/Navigation/NavigationWidget.xml" left="10" top="50"/>
+    <widget url="widgets/OverviewMap/OverviewMapWidget.swf" config="widgets/OverviewMap/OverviewMapWidget.xml" right="0" bottom="0"/>
+    <widget url="widgets/HeaderController/HeaderControllerWidget.swf" config="widgets/HeaderController/HeaderControllerWidget.xml" left="0" top="0"/>
+    <widget url="widgets/Coordinate/CoordinateWidget.swf" config="widgets/Coordinate/CoordinateWidget.xml" label="坐标" left="3" bottom="1"/>
+    <widget url="widgets/Custom/ThreeClassifyWidget.swf" config="widgets/Custom/ThreeClassifyWidget.xml" label="分类" horizontalcenter="0" bottom="1"/>
+    <map attributionvisible="false" esrilogovisible="false" openhandcursorvisible="false" scalebarvisible="true" scalebar="default" zoomslidervisible="false" wraparound180="true" addarcgisbasemaps="false" top="40"  wkid="3857"  initialextent="12417524.30797337 2702979.91199371 12435698.54465215 2711332.28680540" fullextent="12417524.30797337 2702979.91199371 12435698.54465215 2711332.28680540" >
+       	<lods>
+       		<lod resolution="9.4805616477737781613372093023256" scale="36111.98186701241"/>
+			<lod resolution="4.7402808238868890806686046511628" scale="18055.990933506204"/>
+			<lod resolution="2.3701404119434445403343023255814" scale="9027.995466753102"/> 
+			<lod resolution="1.1850702059717222701671511627907" scale="4513.997733376551"/>  
+			<lod resolution="0.59253510298586113508357558139535" scale="2256.998866688275"/>
+       	</lods>
+        <basemaps>
+            <layer label="TDTMapLayer"  type="tdtmapmer" icon="assets/images/birds.png"  style="VectorBaseMap" visible="true"/>
+            <layer label="TDTMapLayerNT"  type="tdtmapmer" icon="assets/images/birds.png"  style="VectorCNNote" visible="true"/>
+<!--             <layer type="dynamic" label="NanShan" url="http://113.108.119.116:6080/arcgis/rest/services/NanShanMercatorNew/MapServer" visible="true"/> -->
+        </basemaps>
+		<operationallayers>
+            <layer type="feature" label="工矿商贸企业" url="http://113.108.119.116:6080/arcgis/rest/services/NanShanMercatorNew/FeatureServer/2" popupconfig="popups/PopUp_3.xml" mode="onDemand" visible="true"/>
+            <layer type="feature" label="公众聚集场所" url="http://113.108.119.116:6080/arcgis/rest/services/NanShanMercatorNew/FeatureServer/1" popupconfig="popups/PopUp_2.xml" mode="onDemand" visible="true"/>
+            <layer type="feature" label="三小场所" url="http://113.108.119.116:6080/arcgis/rest/services/NanShanMercatorNew/FeatureServer/0" popupconfig="popups/PopUp_1.xml" mode="onDemand" visible="true"/>
+            <layer type="feature" label="行政边界" url="http://113.108.119.116:6080/arcgis/rest/services/NanShanMercatorNew/FeatureServer/3" visible="false"/>
+        </operationallayers>
+    </map>
+    <widgetcontainer layout="float">
+        <widget url="widgets/Draw/DrawWidget.swf" config="widgets/Draw/DrawWidget.xml" label="绘图" icon="assets/images/i_draw2.png"/>
+        <widget url="widgets/Edit/EditWidget.swf" config="widgets/Edit/EditWidget.xml" label="编辑" icon="assets/images/i_edit.png"/>
+        <widget url="widgets/LayerList/LayerListWidget.swf" config="widgets/LayerList/LayerListWidget.xml" label="图层列表" icon="assets/images/i_layers.png"/>
+        <widget url="widgets/Legend/LegendWidget.swf" config="widgets/Legend/LegendWidget.xml" label="图例" icon="assets/images/Legend32.png"/>
+    </widgetcontainer>
+</configuration>

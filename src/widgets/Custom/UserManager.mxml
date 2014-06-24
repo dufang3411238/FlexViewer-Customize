@@ -1,0 +1,260 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Group xmlns:fx="http://ns.adobe.com/mxml/2009"
+		 xmlns:s="library://ns.adobe.com/flex/spark"
+		 xmlns:mx="library://ns.adobe.com/flex/mx"
+		 width="100%" height="100%" currentState="reg"
+		 creationComplete="group1_creationCompleteHandler(event)">
+	<s:layout>
+		<s:HorizontalLayout gap.reg="0"/>
+	</s:layout>
+	<fx:Declarations>
+		<s:HTTPService id="regSev" method="POST" result="resultHandler(event)"
+					   url="http://113.108.119.116:8081/phpsrc/reg.php" useProxy="false"> 
+			<mx:request xmlns=""> 
+				<usertype>{curType}</usertype>
+				<username>{username.text}</username> 
+				<userpwd>{psw.text}</userpwd> 
+				<userrealname>{realname.text}</userrealname>
+				<userdep>{dep.text}</userdep>
+				<usertel>{tel.text}</usertel>
+				<usermail>{mail.text}</usermail>
+			</mx:request>         
+		</s:HTTPService> 
+		
+		<s:HTTPService id="getUsers" method="POST" result="getUsersHandler(event)" resultFormat="xml"
+					   url="http://113.108.119.116:8081/phpsrc/usermanage.php" useProxy="false">          
+		</s:HTTPService> 
+	</fx:Declarations>
+	<fx:Script>
+		<![CDATA[
+			import mx.collections.ArrayCollection;
+			import mx.events.FlexEvent;
+			import mx.rpc.events.ResultEvent;
+			import mx.controls.Alert;
+			[Bindable]
+			public var curType:String = "2";
+			private var users:ArrayCollection;
+			protected function button1_clickHandler(event:MouseEvent):void
+			{
+							
+				var tBtn:Label = event.target as Label;
+				if(tBtn){
+					clearAllLabelColor();	
+					if(tBtn.id == "mag"){
+						this.currentState="mag";
+						
+					}else{
+						this.currentState="reg";
+					}
+					tBtn.setStyle("backgroundColor","#79d1ff");
+				}
+			}
+			
+			protected function myLable_rollOverHandler(event:MouseEvent):void
+			{
+				var tLb:Label = event.target as Label;
+				var backgroundColor:uint=tLb.getStyle("backgroundColor");
+				if(backgroundColor==0xededed){
+					tLb.setStyle("backgroundColor","#a6e0f6");
+				}
+			}
+			
+			protected function myLable_rollOutHandler(event:MouseEvent):void
+			{
+				var tLb:Label = event.target as Label;
+				var backgroundColor:uint=tLb.getStyle("backgroundColor");
+				if(backgroundColor==0xa6e0f6){
+					tLb.setStyle("backgroundColor","#ededed");
+				}
+				//tLb.setStyle("backgroundColor","#ededed");
+			}
+			
+			private function clearAllLabelColor():void
+			{
+				for(var i:int=0; i<classTable.numElements;i++)
+				{
+					(classTable.getElementAt(i) as Label).setStyle("backgroundColor","#ededed");
+				}
+			}
+			
+			protected function reg_clickHandler(event:MouseEvent):void
+			{
+				if(repsw.text == psw.text){
+					regSev.send();
+					getUsers.send();
+					username.text = psw.text =  repsw.text =
+						realname.text = dep.text = mail.text =  tel.text = "";
+					isAdmin.selected = false;
+				}else{
+					resDisplay.text="输入密码不一致！";
+					setInterval(function ():void{
+						resDisplay.text="";
+					},3000);
+				}
+			}
+			
+			protected function reset_clickHandler(event:MouseEvent):void
+			{
+				username.text = psw.text =  repsw.text =
+					realname.text = dep.text = mail.text =  tel.text = "";
+				isAdmin.selected = false;
+			}
+			
+			protected function isAdmin_changeHandler(event:Event):void
+			{
+				curType = isAdmin.selected?"1":"2";
+			}
+			
+			protected function resultHandler(event:ResultEvent):void
+			{
+				var s:String = event.result.toString();
+				var t:Number = parseInt(s);
+				
+				if(!isNaN(t) && t>0){
+					resDisplay.text="成功添加用户！";
+				}else{
+					resDisplay.text="添加用户失败！";
+				}
+				setInterval(function ():void{
+					resDisplay.text="";
+				},3000);
+			}
+			
+			protected function getUsersHandler(event:ResultEvent):void
+			{
+				users = new ArrayCollection();
+				var s:String = event.result.toString();
+				var xml:XML = new XML(s);
+				
+				var userList:XMLList = xml..user;
+				for (var i:int = 0; i < userList.length(); i++)
+				{
+					var tid:String = userList[i].id;
+					var tusername:String = userList[i].username;
+					var tpsw:String = userList[i].psw;
+					var tusertype:String = getTypeName(userList[i].usertype);
+					
+					var tuserrealname:String = userList[i].userrealname;
+					var tuserdep:String = userList[i].userdep;
+					var tusertel:String = userList[i].usertel;
+					var tusermail:String = userList[i].usermail;
+					
+					users.addItem({id:tid,username:tusername,psw:tpsw,usertype:tusertype,userrealname:tuserrealname,userdep:tuserdep,
+								   usertel:tusertel,usermail:tusermail});
+				}
+				
+				AuthorityDG.dataProvider = users;
+				
+				function getTypeName(id:String):String
+				{
+					var name:String = "";
+					if(id=="1"){
+						name = "管理员";
+					}else if(id=="2"){
+						name = "普通用户";
+					}
+				
+					return name;
+				}
+			}
+			
+			protected function group1_creationCompleteHandler(event:FlexEvent):void
+			{
+				getUsers.send();
+			}
+			
+			protected function group1_activateHandler(event:Event):void
+			{
+				getUsers.send();
+			}
+			
+		]]>
+	</fx:Script>
+	
+	<s:states>
+		<s:State name="reg"/>
+		<s:State name="mag"/>
+	</s:states>
+	<fx:Declarations>
+		<!-- 将非可视元素（例如服务、值对象）放在此处 -->
+	</fx:Declarations>
+	
+	<s:BorderContainer id="classTable" width="250" height="100%" click="button1_clickHandler(event)">
+		<s:layout>
+			<s:VerticalLayout/>
+		</s:layout>
+		<s:Label id="reg" width="100%" height="40" backgroundColor="#79d1ff" buttonMode="true"
+				 rollOut="myLable_rollOutHandler(event)"
+				 rollOver="myLable_rollOverHandler(event)" text="用户注册"  textAlign="center"
+				 verticalAlign="middle"/>
+		<s:Label id="mag" width="100%" height="40" backgroundColor="#ededed" buttonMode="true"
+				 rollOut="myLable_rollOutHandler(event)"
+				 rollOver="myLable_rollOverHandler(event)" text="用户信息"  textAlign="center"
+				 verticalAlign="middle"/>
+	</s:BorderContainer>
+	
+	
+	<s:BorderContainer includeIn="reg" width="100%" height="100%" borderVisible="false"
+					   cornerRadius="0">
+		<s:BorderContainer top="30" width="{this.width - 250}" height="100%" cornerRadius="15"
+						   horizontalCenter="0">
+			<s:layout>
+				<s:VerticalLayout gap="15" paddingLeft="80" paddingTop="15"/>
+			</s:layout>
+			<s:Label id="resDisplay" color="#F60000" fontSize="18" fontWeight="normal" paddingTop="7"
+					 text="" textAlign="center" verticalAlign="middle"/>
+			<s:HGroup  width="350">
+				<s:Label paddingTop="7" text="用 户 名："/>
+				<s:TextInput id="username" width="290" height="30"/>
+			</s:HGroup>
+			<s:Label color="#4E4E4E" fontSize="12" fontWeight="normal" paddingLeft="75" 
+					 text="请注意，用户名注册后不能更改"/>
+			<s:HGroup width="350">
+				<s:Label paddingTop="7" text="密    码："/>
+				<s:TextInput id="psw"  width="290" height="30" displayAsPassword="true"/>
+			</s:HGroup>
+			<s:Label fontSize="12" fontWeight="normal" paddingLeft="75" color="#4E4E4E"
+					 text="请输入4~20个字符（字母、数字、下划线）的用户名，1个汉字为2个字符。       请注意，用户名注册后不能更改。"/>
+			<s:HGroup width="350">
+				<s:Label paddingTop="7" text="确认密码："/>
+				<s:TextInput id="repsw" width="290" height="30" displayAsPassword="true"/>
+			</s:HGroup>
+			<s:HGroup width="350">
+				<s:Label  paddingTop="7" text="用户姓名："/>
+				<s:TextInput id="realname" width="290" height="30"/>
+			</s:HGroup>
+			<s:HGroup width="350">
+				<s:Label  paddingTop="7" text="所在部门："/>
+				<s:TextInput id="dep" width="290" height="30"/>
+			</s:HGroup>
+			<s:HGroup width="350" >
+				<s:Label paddingTop="7" text="联系电话："/>
+				<s:TextInput id="tel" width="290" height="30"/>
+			</s:HGroup>
+			<s:HGroup width="350">
+				<s:Label paddingTop="7" text="电子邮件："/>
+				<s:TextInput id="mail" width="290" height="30"/>
+			</s:HGroup>
+			<s:CheckBox id="isAdmin" label="是否为管理员" change="isAdmin_changeHandler(event)" />
+			<s:HGroup width="350" gap="100" paddingLeft="40">
+				<s:Image source="@Embed('assets/images/reg.png')" click="reg_clickHandler(event)"/>
+				<s:Image source="@Embed('assets/images/reset.png')" click="reset_clickHandler(event)"/>
+			</s:HGroup>
+
+		</s:BorderContainer>
+	</s:BorderContainer>
+	<s:DataGrid id="AuthorityDG" includeIn="mag" width="100%" height="100%" itemCreationPolicy="immediate"  >
+		<s:columns>
+			<s:ArrayList>
+				<s:GridColumn dataField="username" headerText="用户名" ></s:GridColumn>
+				<s:GridColumn dataField="psw" headerText="密码"></s:GridColumn>
+				<s:GridColumn dataField="usertype" headerText="用户类型"></s:GridColumn>
+				<s:GridColumn dataField="userrealname" headerText="用户姓名"></s:GridColumn>
+				<s:GridColumn dataField="userdep" headerText="所属部门"></s:GridColumn>
+				<s:GridColumn dataField="usertel" headerText="联系电话"></s:GridColumn>
+				<s:GridColumn dataField="usermail" headerText="电子邮件"></s:GridColumn>
+			</s:ArrayList>
+		</s:columns>
+	</s:DataGrid>
+	
+</s:Group>

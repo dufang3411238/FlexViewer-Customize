@@ -1,0 +1,29 @@
+<?xml version="1.0" ?>
+<configuration>
+    <title>公众聚集场所</title>
+    <fields>
+        <field name="企业名称" alias="    企业名称:    "  visible="true"/>
+        <field name="生产经营地址" alias="生产经营地址:    "  visible="true"/>
+        <field name="法定代表人" alias="  法定代表人:    "  visible="true"/>
+        <field name="法人电话" alias="法人电话:    "  visible="true"/>
+        <field name="联系人" alias="      联系人:    "  visible="true"/>
+        <field name="联系人电话" alias="  联系人电话:    "  visible="true"/>
+        <field name="行业类别" alias="    行业类别:    "  visible="true"/>
+        <field name="成立日期" alias="    成立日期:    "  visible="true"/>
+        <field name="经营范围" alias="    经营范围:    "  visible="true"/>
+        <field name="经营场所面积" alias="经营场所面积:    "  visible="true"/>
+        <field name="从业人数" alias="    从业人数:    "  visible="true"/>
+        <field name="安全类别" alias="    安全类别:    "  visible="true"/>
+        <field name="安全等级" alias="    安全等级:    "  visible="true"/>
+        <field name="检查频次" alias="    检查频次:    "  visible="true"/>
+        <field name="所属社区" alias="        所属社区:    "  visible="true"/>
+        <field name="网格" alias="        网格:    "  visible="true"/>
+        <field name="网格管理员" alias="  网格管理员:    "  visible="true"/>
+        <field name="消防警" alias="      消防警:    "  visible="true"/>
+        <field name="监管单位" alias="    监管单位:    "  visible="true"/>
+        <field name="监管人" alias="      监管人:    "  visible="true"/>
+    </fields>
+    <showattachments>false</showattachments>
+    <showrelatedrecords>false</showrelatedrecords>
+    <showzoomtobutton>false</showzoomtobutton>
+</configuration>

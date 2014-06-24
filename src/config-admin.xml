@@ -1,0 +1,79 @@
+<?xml version="1.0" ?>
+<configuration>
+    <title>南山街道办安全管理地理信息系统</title>
+    <logo>assets/images/logo.png</logo>
+    <style>
+        <colors>0x444444,0xf5f5f5,0xa6e0f6,0xdeebff,0x1c84ba</colors>
+        <alpha>1</alpha>
+        <font name="宋体" size="14"/>
+        <titlefont name="微软雅黑" size="28" />
+        <subtitlefont name="Verdana"/>
+    </style>
+    <!-- replace the following url with your own geometryservice -->
+    <geometryservice url="https://utility.arcgisonline.com/arcgis/rest/services/Geometry/GeometryServer"/>
+    
+    <widget url="widgets/Navigation/NavigationWidget.swf" config="widgets/Navigation/NavigationWidget.xml" right="90" top="172" />
+    <widget right="150" top="172" config="widgets/MapSwitcher/MapSwitcherWidget.xml" url="widgets/MapSwitcher/MapSwitcherWidget.swf"/>
+<!--     <widget url="widgets/Custom/LegendWidget.swf" config="widgets/Custom/LegendWidget.xml" label="图例" left="228" bottom="8"/> -->
+    <widget url="widgets/HeaderController/HeaderControllerWidget.swf" config="widgets/HeaderController/HeaderControllerWidget.xml" left="0" top="0"/>
+    <widget url="widgets/Custom/LeftPanelWidgetNew.swf" config="widgets/Custom/LeftPanelWidgetNew.xml" label="分类" left="10" top="141" bottom="10" right="10" icon="assets/images/ipin.png"/>
+    <map  attributionvisible="false" esrilogovisible="false" openhandcursorvisible="false" scalebarvisible="false" scalebar="default" 
+    	 zoomslidervisible="false" wraparound180="true" addarcgisbasemaps="false"   wkid="3857"  initialextent="12417524.30797337 2702979.91199371 12434698.54465215 2712332.28680540" 
+    	 fullextent="12417524.30797337 2702979.91199371 12435698.54465215 2711332.28680540" 
+    	 left="230" top="141" right="10" bottom="10">
+       	<lods>
+       		<lod resolution="9.4805616477737781613372093023256" scale="36111.98186701241"/>
+			<lod resolution="4.7402808238868890806686046511628" scale="18055.990933506204"/>
+			<lod resolution="2.3701404119434445403343023255814" scale="9027.995466753102"/> 
+			<lod resolution="1.1850702059717222701671511627907" scale="4513.997733376551"/>  
+			<lod resolution="0.59253510298586113508357558139535" scale="2256.998866688275"/>
+       	</lods>
+        <basemaps>
+            <layer label="影像"  type="tdtmapmer" icon="assets/images/birds.png"  style="ImageBaseMap" visible="false"/>
+            <layer label="影像"  type="tdtmapmer" icon="assets/images/birds.png"  style="ImageCNNote" visible="false"/>
+            <layer label="地图"  type="tdtmapmer" icon="assets/images/birds.png"  style="VectorBaseMap" visible="true"/>
+            <layer label="地图"  type="tdtmapmer" icon="assets/images/birds.png"  style="VectorCNNote" visible="true"/>
+        </basemaps>
+		<operationallayers>
+			<layer type="tiled" label="mask" alpha="0.8"
+				url="http://113.108.119.116:6080/arcgis/rest/services/mask/MapServer"
+				mode="onDemand" visible="true" />
+            <layer type="feature" label="工业厂房"
+				url="http://113.108.119.116:6080/arcgis/rest/services/industrySolo/FeatureServer/0"
+				mode="onDemand" visible="true" />
+
+            <layer type="feature" label="工矿商贸企业"
+				url="http://113.108.119.116:6080/arcgis/rest/services/newDone/FeatureServer/1"
+				popupconfig="popups/PopUp_3.xml" mode="onDemand" visible="true">
+				<simplerenderer>
+					<picturemarkersymbol width="20" height="20" url="assets/images/ent.png"/>
+				</simplerenderer>
+			</layer>
+			<layer type="feature" label="公众聚集场所"
+				url="http://113.108.119.116:6080/arcgis/rest/services/newDone/FeatureServer/2"
+				popupconfig="popups/PopUp_2.xml" mode="onDemand" visible="true">
+				<simplerenderer>
+					<picturemarkersymbol width="20" height="20" url="assets/images/pub.png"/>
+				</simplerenderer>
+			</layer>
+			<layer type="feature" label="三小场所"
+				url="http://113.108.119.116:6080/arcgis/rest/services/newDone/FeatureServer/0"
+				 mode="onDemand" visible="true">
+				<simplerenderer>
+					<picturemarkersymbol width="20" height="20" url="assets/images/sm.png"/>
+				</simplerenderer>
+			</layer>
+			
+			<layer type="feature" label="DistrictProspective"
+				url="http://113.108.119.116:6080/arcgis/rest/services/newDone/FeatureServer/4"
+				mode="onDemand" visible="true" />
+        </operationallayers>
+        
+    </map>
+    
+   	
+		<widget url="widgets/Edit/EditWidget.swf" config="widgets/Edit/EditWidget.xml"
+			label="编辑" icon="assets/images/i_edit.png" preload="open" left="228" bottom="8" />
+	
+    <widget id="userManagerID" url="widgets/UserManager/UserManager.swf"  config="widgets/UserManager/UserManager.xml" left="10" top="141" bottom="10" right="10"/>
+</configuration>

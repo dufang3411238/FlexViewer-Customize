@@ -1,0 +1,161 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Group xmlns:fx="http://ns.adobe.com/mxml/2009"
+		 xmlns:s="library://ns.adobe.com/flex/spark"
+		 xmlns:mx="library://ns.adobe.com/flex/mx"
+		 width="380" height="470">
+	<s:layout>
+		<s:HorizontalLayout gap="0"/>
+	</s:layout>
+	<fx:Declarations>
+		<s:HTTPService id="regSev" method="POST" result="resultHandler(event)"
+					   url="http://113.108.119.116:8081/phpsrc/reg.php" useProxy="false"> 
+			<mx:request xmlns=""> 
+				<usertype>{curType}</usertype>
+				<username>{username.text}</username> 
+				<userpwd>{psw.text}</userpwd> 
+				<userrealname>{realname.text}</userrealname>
+				<userdep>{dep.text}</userdep>
+				<usertel>{tel.text}</usertel>
+				<usermail>{mail.text}</usermail>
+			</mx:request>         
+		</s:HTTPService> 
+	</fx:Declarations>
+	<fx:Script>
+		<![CDATA[
+			import mx.collections.ArrayCollection;
+			import mx.events.FlexEvent;
+			import mx.rpc.events.ResultEvent;
+			import mx.controls.Alert;
+			import com.esri.viewer.AppEvent;
+			[Bindable]
+			public var curType:String = "2";
+			private var users:ArrayCollection;
+
+			
+			protected function reg_clickHandler(event:MouseEvent):void
+			{
+				
+				if(!username.text)
+				{
+					resDisplay.text="用户名不能为空！";
+					return;
+				}
+				if(!psw.text)
+				{
+					resDisplay.text="密码不能为空！";
+					return;
+				}
+				if(psw.text.length < 4)
+				{
+					resDisplay.text="密码长度不能小于4！";
+					return;
+				}
+				if(!repsw.text)
+				{
+					resDisplay.text="确认密码不能为空！";
+					return;
+				}
+				
+				if(repsw.text == psw.text){
+					regSev.send();
+					username.text = psw.text =  repsw.text =
+						realname.text = dep.text = mail.text =  tel.text = "";
+					isAdmin.selected = false;
+					
+				}else{
+					resDisplay.text="输入密码不一致！";
+					setInterval(function ():void{
+						resDisplay.text="";
+					},3000);
+				}
+			}
+			
+			protected function reset_clickHandler(event:MouseEvent):void
+			{
+				username.text = psw.text =  repsw.text =
+					realname.text = dep.text = mail.text =  tel.text = "";
+				isAdmin.selected = false;
+			}
+			
+			protected function isAdmin_changeHandler(event:Event):void
+			{
+				curType = isAdmin.selected?"1":"2";
+			}
+			
+			protected function resultHandler(event:ResultEvent):void
+			{
+				var s:String = event.result.toString();
+				var t:Number = parseInt(s);
+				
+				if(!isNaN(t) && t>0){
+					resDisplay.text="成功添加用户！";
+					AppEvent.dispatch("REGSUCCESS");
+				}else{
+					resDisplay.text="添加用户失败！";
+				}
+				setInterval(function ():void{
+					resDisplay.text="";
+				},2000);
+			}
+			
+		]]>
+	</fx:Script>
+	
+	<fx:Declarations>
+		<!-- 将非可视元素（例如服务、值对象）放在此处 -->
+	</fx:Declarations>
+	
+		<s:BorderContainer top="30" width="380" height="470" borderVisible="false"
+						   horizontalCenter="0">
+			<s:layout>
+				<s:VerticalLayout gap="12" paddingLeft="20" paddingTop="15"/>
+			</s:layout>
+			<s:Label id="resDisplay" color="#F60000" fontSize="14" fontWeight="normal" paddingTop="7"
+					 text="" textAlign="center" verticalAlign="middle"/>
+			<s:HGroup width="350">
+				<s:Label fontSize="13" paddingTop="7" text="用 户 名："/>
+				<s:TextInput id="username" width="250" height="25"/>
+			</s:HGroup>
+			<s:Label color="#4E4E4E" fontSize="12" fontWeight="normal" paddingLeft="75"
+					 text="请注意，用户名注册后不能更改"/>
+			<s:HGroup width="350">
+				<s:Label fontSize="13" paddingTop="7" text="密    码："/>
+				<s:TextInput id="psw" width="250" height="25" displayAsPassword="true"/>
+			</s:HGroup>
+			<s:VGroup>
+				
+				<s:Label color="#4E4E4E" fontSize="12" fontWeight="normal" paddingLeft="75"
+						 text="请注意，用户名注册后不能更改。"/>	
+				<s:Label color="#4E4E4E" fontSize="12" fontWeight="normal" paddingLeft="75"
+						 text="请输入4~20个字符（字母、数字、下划线）的用户名."/>	
+			</s:VGroup>
+			
+			<s:HGroup width="350">
+				<s:Label fontSize="13" paddingTop="7" text="确认密码："/>
+				<s:TextInput id="repsw" width="250" height="25" displayAsPassword="true"/>
+			</s:HGroup>
+			<s:HGroup width="350">
+				<s:Label fontSize="13" paddingTop="7" text="用户姓名："/>
+				<s:TextInput id="realname" width="250" height="25"/>
+			</s:HGroup>
+			<s:HGroup width="350">
+				<s:Label fontSize="13" paddingTop="7" text="所在部门："/>
+				<s:TextInput id="dep" width="250" height="25"/>
+			</s:HGroup>
+			<s:HGroup width="350">
+				<s:Label fontSize="13" paddingTop="7" text="联系电话："/>
+				<s:TextInput id="tel" width="250" height="25"/>
+			</s:HGroup>
+			<s:HGroup width="350">
+				<s:Label fontSize="13" paddingTop="7" text="电子邮件："/>
+				<s:TextInput id="mail" width="250" height="25"/>
+			</s:HGroup>
+			<s:CheckBox id="isAdmin" label="是否为管理员" change="isAdmin_changeHandler(event)"
+						fontSize="13"/>
+			<s:HGroup width="350" gap="100" paddingLeft="40">
+				<s:Image click="reg_clickHandler(event)" source="@Embed('assets/images/reg.png')"/>
+				<s:Image click="reset_clickHandler(event)" source="@Embed('assets/images/reset.png')"/>
+			</s:HGroup>
+
+		</s:BorderContainer>
+</s:Group>

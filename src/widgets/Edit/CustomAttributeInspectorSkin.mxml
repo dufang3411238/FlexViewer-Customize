@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Skin xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		xmlns:s="library://ns.adobe.com/flex/spark" 
+		xmlns:mx="library://ns.adobe.com/flex/mx">
+	<!-- host component -->
+	<fx:Metadata>
+		[HostComponent("com.esri.ags.components.AttributeInspector")]
+	</fx:Metadata>
+	
+	<!-- states -->
+	<s:states>
+		<s:State name="invalid" />
+		<s:State name="disabled" />
+		<s:State name="normal" />
+	</s:states>
+	
+	<!-- SkinParts
+	name=deleteButton, type=spark.components.supportClasses.ButtonBase, required=false
+	name=labelField, type=mx.core.IFactory, required=true
+	name=textField, type=mx.core.IFactory, required=true
+	name=list, type=spark.components.supportClasses.ListBase, required=true
+	name=integerField, type=mx.core.IFactory, required=true
+	name=singleField, type=mx.core.IFactory, required=true
+	name=stringField, type=mx.core.IFactory, required=true
+	name=smallIntegerField, type=mx.core.IFactory, required=true
+	name=dateField, type=mx.core.IFactory, required=true
+	name=editSummaryLabel, type=spark.components.Label, required=false
+	name=typeField, type=mx.core.IFactory, required=true
+	name=nextButton, type=spark.components.supportClasses.ButtonBase, required=false
+	name=previousButton, type=spark.components.supportClasses.ButtonBase, required=false
+	name=doubleField, type=mx.core.IFactory, required=true
+	name=memoField, type=mx.core.IFactory, required=true
+	name=rangeDomainField, type=mx.core.IFactory, required=true
+	name=codedValueDomainField, type=mx.core.IFactory, required=true
+	name=okButton, type=spark.components.supportClasses.ButtonBase, required=false
+	-->
+</s:Skin>

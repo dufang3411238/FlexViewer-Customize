@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:SparkSkin xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		xmlns:s="library://ns.adobe.com/flex/spark" 
+		xmlns:mx="library://ns.adobe.com/flex/mx">
+	<!-- host component -->
+	<fx:Metadata>
+		[HostComponent("com.esri.ags.components.ContentNavigator")]
+	</fx:Metadata>
+	
+	<!-- states -->
+	<s:states>
+		<s:State name="disabled" />
+		<s:State name="noContent" />
+		<s:State name="noNavigation" />
+		<s:State name="noNextLabel" />
+		<s:State name="noNext" />
+		<s:State name="noPreviousLabel" />
+		<s:State name="noPrevious" />
+		<s:State name="normalLabel" />
+		<s:State name="normal" />
+	</s:states>
+	
+	<!-- SkinParts
+	name=headerGroup, type=spark.components.supportClasses.GroupBase, required=false
+	name=previousButton, type=spark.components.supportClasses.ButtonBase, required=false
+	name=nextButton, type=spark.components.supportClasses.ButtonBase, required=false
+	name=contentGroup, type=spark.components.Group, required=true
+	name=closeButton, type=spark.components.supportClasses.ButtonBase, required=false
+	-->
+	<s:Group id="contentGroup" x="-2"
+			 x.disabled="-10" y.disabled="0">
+	</s:Group>
+</s:SparkSkin>

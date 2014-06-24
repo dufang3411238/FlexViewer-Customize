@@ -1,0 +1,507 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Group xmlns:fx="http://ns.adobe.com/mxml/2009"
+		 xmlns:s="library://ns.adobe.com/flex/spark"
+		 xmlns:mx="library://ns.adobe.com/flex/mx"
+		 xmlns:esri="http://www.esri.com/2008/ags"
+		 height="400" creationComplete="list1_creationCompleteHandler3(event)"
+		 implements="com.esri.ags.components.supportClasses.IGraphicRenderer"
+		 chromeColor="#0C594B">
+	
+	
+	<fx:Declarations>
+		<!-- 将非可视元素（例如服务、值对象）放在此处 -->
+		
+	</fx:Declarations>
+	<s:states>
+		<s:State name="multi"/>
+		<s:State name="single"/>
+		<s:State name="onlyname"/>
+	</s:states>
+	<fx:Script>
+		<![CDATA[
+			import com.esri.ags.Graphic;
+			import com.esri.ags.Map;
+			import com.esri.ags.components.ContentNavigator;
+			import com.esri.ags.components.supportClasses.IGraphicRenderer;
+			import com.esri.ags.layers.FeatureLayer;
+			import com.esri.ags.layers.GraphicsLayer;
+			import com.esri.ags.layers.supportClasses.CodedValue;
+			import com.esri.ags.layers.supportClasses.CodedValueDomain;
+			import com.esri.ags.layers.supportClasses.FeatureType;
+			import com.esri.ags.layers.supportClasses.Field;
+			import com.esri.ags.layers.supportClasses.IDomain;
+			import com.esri.ags.layers.supportClasses.LayerDetails;
+			import com.esri.ags.portal.supportClasses.PopUpFieldFormat;
+			import com.esri.ags.portal.supportClasses.PopUpFieldInfo;
+			import com.esri.ags.portal.supportClasses.PopUpInfo;
+			import com.esri.ags.portal.supportClasses.PopUpMediaInfo;
+			import com.esri.ags.utils.ESRIMessageCodes;
+			import com.esri.ags.utils.StringUtil;
+			
+			import flash.events.Event;
+			
+			import mx.collections.ArrayCollection;
+			import mx.controls.Alert;
+			import mx.core.UIComponent;
+			import mx.events.FlexEvent;
+			import mx.formatters.DateFormatter;
+			import mx.formatters.NumberBaseRoundType;
+			import mx.formatters.NumberFormatter;
+			import mx.utils.ObjectUtil;
+			import mx.utils.StringUtil;
+			
+			import spark.components.List;
+			import spark.components.supportClasses.SkinnableComponent;
+			import spark.events.IndexChangeEvent;
+			
+			private const _dateFormatter:DateFormatter = new DateFormatter();
+			
+			private const _numberFormatter:NumberFormatter = new NumberFormatter();
+			
+			private var _formattedAttributes:Object;
+			
+			
+			[Bindable]
+			private var DGArray:ArrayCollection = new ArrayCollection(); ;
+			[Bindable]
+			private var itemArray:ArrayCollection;
+			
+			public function get formattedAttributes() : Object {
+				return this._formattedAttributes ;
+			}
+			
+			public function get featureLayer() : FeatureLayer {
+				return this.graphic?this.graphic.graphicsLayer as FeatureLayer:null;
+			}
+			
+			private var _graphic:Graphic;
+			
+			private var _graphicChanged:Boolean;
+			
+			private var isInit:Boolean = false;
+			public function get graphic() : Graphic {
+				return this._graphic;
+			}
+			
+			public function set graphic(value:Graphic) : void {
+				this._graphic = value;
+				this._graphicChanged = true;
+				
+				
+				//动态创建LIST
+				
+	
+				invalidateProperties();
+				dispatchEvent(new Event("graphicChange"));
+			}
+			
+			public function get map() : Map {
+				var result:Map = null;
+				var graphicsLayer:GraphicsLayer = null;
+				var graphic:Graphic = this.graphic;
+				if(graphic)
+				{
+					graphicsLayer = graphic.graphicsLayer;
+					if(graphicsLayer)
+					{
+						result = graphicsLayer.map;
+					}
+				}
+				return result;
+			}
+			
+			private var _popUpInfo:PopUpInfo;
+			
+			public function get popUpInfo() : PopUpInfo {
+				return this._popUpInfo;
+			}
+			
+			public function set popUpInfo(value:PopUpInfo) : void {
+				this._popUpInfo = value;
+				dispatchEvent(new Event("popUpInfoChange"));
+			}
+			
+			private var _validPopUpMediaInfos:Array;
+			
+			public function get validPopUpMediaInfos() : Array {
+				return this._validPopUpMediaInfos;
+			}
+			
+			override protected function commitProperties() : void {
+				var attributes:Object = null;
+				var formatted:Object = null;
+				var layer:FeatureLayer = null;
+				var layerDetails:LayerDetails = null;
+				var fieldInfos:Array = null;
+				var mediaInfos:Array = null;
+				var fieldName:String = null;
+				var fieldValue:Object = null;
+				var fieldInfo:PopUpFieldInfo = null;
+				var validMediaInfos:Array = null;
+				var mediaInfo:PopUpMediaInfo = null;
+				var typeIdField:String = null;
+				var typeId:String = null;
+				var domainName:String = null;
+				var typeName:String = null;
+				var url:String = null;
+				var chartField:String = null;
+				
+				if(this._graphicChanged)
+				{
+					this._graphicChanged = false;
+					
+					attributes = this.graphic.attributes;
+					formatted = attributes?ObjectUtil.copy(attributes):{};
+					layer = this.featureLayer;
+					layerDetails = layer?layer.layerDetails:null;
+					fieldInfos = this.popUpInfo?this.popUpInfo.popUpFieldInfos:null;
+					mediaInfos = this.popUpInfo?this.popUpInfo.popUpMediaInfos:null;
+					DGArray.removeAll();
+					for each(fieldInfo in fieldInfos)
+					{
+						fieldName = fieldInfo.fieldName;
+						fieldValue = formatted[fieldName];
+						formatted[fieldName] = this.formatValue(fieldValue,fieldInfo,layerDetails);
+						DGArray.addItem({name:fieldName, val:fieldValue});
+					}
+					if(layerDetails)
+					{
+						typeIdField = layerDetails.typeIdField;
+						typeId = typeIdField?attributes[typeIdField]:null;
+						for(fieldName in attributes)
+						{
+							fieldValue = attributes[fieldName];
+							if(fieldValue != null)
+							{
+								domainName = this.getDomainName(fieldName,fieldValue,typeId,layerDetails);
+								if(domainName)
+								{
+									formatted[fieldName] = domainName;
+								}
+								else if(fieldName === typeIdField)
+								{
+									typeName = this.getTypeName(typeId,layerDetails);
+									if(typeName)
+									{
+										formatted[fieldName] = typeName;
+									}
+								}
+								
+							}
+						}
+					}
+					this._formattedAttributes = formatted;
+					validMediaInfos = [];
+					for each(mediaInfo in mediaInfos)
+					{
+						switch(mediaInfo.type)
+						{
+							case PopUpMediaInfo.IMAGE:
+								url = mediaInfo.imageSourceURL;
+								if(url)
+								{
+									url = com.esri.ags.utils.StringUtil.substitute(url,attributes);
+									if(url)
+									{
+										url = mx.utils.StringUtil.trim(url);
+										if(url)
+										{
+											validMediaInfos.push(mediaInfo);
+										}
+									}
+								}
+								continue;
+							case PopUpMediaInfo.BAR_CHART:
+							case PopUpMediaInfo.COLUMN_CHART:
+							case PopUpMediaInfo.LINE_CHART:
+							case PopUpMediaInfo.PIE_CHART:
+								for each(chartField in mediaInfo.chartFields)
+							{
+								if(attributes[chartField] != null)
+								{
+									validMediaInfos.push(mediaInfo);
+									break;
+								}
+							}
+								continue;
+						}
+					}
+					this._validPopUpMediaInfos = validMediaInfos;
+				}
+				
+				//修改 by tinytoy 
+				
+				var tempDataProvider:ContentNavigator = map.infoWindowContent as ContentNavigator;
+				//修复 infowindow上的要素跳转
+				tempDataProvider.nextButton.visible = false;
+				tempDataProvider.previousButton.visible = false;
+				tempDataProvider.headerGroup.getElementAt(3).visible = false;
+
+				var temDataLen:int = tempDataProvider.dataProvider.length;
+				
+				itemArray = new ArrayCollection();
+				for(var ii:int=0;ii<temDataLen;ii++)
+				{
+					var tt:Graphic = tempDataProvider.dataProvider.getItemAt(ii) as Graphic;
+					itemArray.addItem({label:mx.utils.StringUtil.trim(tt.attributes['企业名称'].toString()),source:tt});
+				} 
+				
+				
+				if(isInit){
+				
+					var layerName:String=null;
+					for(var iii:int=0;iii<temDataLen;iii++)
+					{
+						var ttt:Graphic = tempDataProvider.dataProvider.getItemAt(iii) as Graphic;
+						layerName = ttt.graphicsLayer.id;
+						break;
+					} 
+					if(layerName.indexOf("工")!=-1){
+						if(temDataLen>1){
+							this.currentState="onlyname";
+						}else{
+							this.currentState="single";
+						}
+					}else{
+						this.currentState="single";
+					}
+					
+				}
+				
+				
+			}
+			
+			private function formatValue(fieldValue:Object, fieldInfo:PopUpFieldInfo, layerDetails:LayerDetails) : Object {
+				var field:Field = null;
+				var f:Field = null;
+				var date:Date = null;
+				var dateFormat:String = null;
+				var formatString:String = null;
+				if((fieldValue == null) || (!fieldInfo) || (!fieldInfo.format))
+				{
+					return fieldValue;
+				}
+				var result:Object = fieldValue;
+				var fieldName:String = fieldInfo.fieldName;
+				var format:PopUpFieldFormat = fieldInfo.format;
+				var fields:Array = layerDetails?layerDetails.fields:null;
+				for each(f in fields)
+				{
+					if(fieldName === f.name)
+					{
+						field = f;
+						break;
+					}
+				}
+				if(field)
+				{
+					if(!fieldInfo.label)
+					{
+						fieldInfo.label = field.alias;
+					}
+					if((field.type === Field.TYPE_DATE) && (fieldValue is Number))
+					{
+						date = new Date(fieldValue);
+						if(date.milliseconds === 999)
+						{
+							date.milliseconds++;
+						}
+						if(format.useUTC)
+						{
+							date.minutes = date.minutes + date.timezoneOffset;
+						}
+						fieldValue = date;
+					}
+				}
+				if(fieldValue is Number)
+				{
+					if(format.precision < 0)
+					{
+						this._numberFormatter.rounding = NumberBaseRoundType.NONE;
+					}
+					else
+					{
+						this._numberFormatter.rounding = NumberBaseRoundType.NEAREST;
+					}
+					this._numberFormatter.precision = format.precision;
+					this._numberFormatter.useThousandsSeparator = format.useThousandsSeparator;
+					result = this._numberFormatter.format(fieldValue);
+				}
+				else if(fieldValue is Date)
+				{
+					dateFormat = format.dateFormat?format.dateFormat:PopUpFieldFormat.SHORT_DATE_SHORT_TIME;
+					formatString = resourceManager.getString(ESRIMessageCodes.ESRI_MESSAGES,"popUpFormat_" + dateFormat);
+					if(formatString)
+					{
+						this._dateFormatter.formatString = formatString;
+					}
+					else
+					{
+						this._dateFormatter.formatString = dateFormat;
+					}
+					result = this._dateFormatter.format(fieldValue);
+					if(!result)
+					{
+						result = this._dateFormatter.error + " (" + this._dateFormatter.formatString + ")";
+					}
+				}
+				
+				return result;
+			}
+			
+			private function getDomainName(fieldName:String, fieldValue:Object, typeId:String, layerDetails:LayerDetails) : String {
+				var result:String = null;
+				var domain:IDomain = null;
+				var typeFound:* = false;
+				var type:FeatureType = null;
+				var fields:Array = null;
+				var field:Field = null;
+				var codedValues:Array = null;
+				var codedValue:CodedValue = null;
+				var types:Array = layerDetails.types;
+				if((types) && (typeId))
+				{
+					for each(type in types)
+					{
+						if(typeId === type.id)
+						{
+							typeFound = true;
+							domain = type.domains?type.domains[fieldName]:null;
+							break;
+						}
+					}
+				}
+				if((!domain) && (!typeFound))
+				{
+					fields = layerDetails.fields;
+					for each(field in fields)
+					{
+						if(fieldName === field.name)
+						{
+							domain = field.domain;
+							break;
+						}
+					}
+				}
+				if(domain is CodedValueDomain)
+				{
+					codedValues = CodedValueDomain(domain).codedValues;
+					for each(codedValue in codedValues)
+					{
+						if(fieldValue == codedValue.code)
+						{
+							result = codedValue.name;
+							break;
+						}
+					}
+				}
+				return result;
+			}
+			
+			private function getTypeName(typeId:String, layerDetails:LayerDetails) : String {
+				var result:String = null;
+				var type:FeatureType = null;
+				var types:Array = layerDetails.types;
+				if(types)
+				{
+					for each(type in types)
+					{
+						if(typeId === type.id)
+						{
+							result = type.name;
+							break;
+						}
+					}
+				}
+				return result;
+			}
+			
+			protected function list1_changeHandler(event:IndexChangeEvent):void
+			{
+					this.currentState="multi";
+					var formatted:Object = null;
+	
+					var fieldInfos:Array = null;
+					var fieldName:String = null;
+					var fieldValue:Object = null;
+					var fieldInfo:PopUpFieldInfo = null;
+					var tList:List = event.currentTarget as List;
+				
+					var currentGraphic:Graphic = tList.selectedItem.source as Graphic;
+					
+					
+					formatted = ObjectUtil.copy(currentGraphic.attributes);
+					fieldInfos = this.popUpInfo?this.popUpInfo.popUpFieldInfos:null;
+	
+					DGArray.removeAll();
+					for each(fieldInfo in fieldInfos)
+					{
+						fieldName = fieldInfo.fieldName;
+						fieldValue = formatted[fieldName];
+						DGArray.addItem({name:fieldName, val:fieldValue});
+					}
+			}
+			
+			protected function list1_creationCompleteHandler(event:FlexEvent):void
+			{
+				this.currentState="single";
+				//Alert.show('f');
+				
+				
+				//myBorderContainer.addElementAt(
+				//listFirst.width=300;
+				
+			}
+			protected function list1_creationCompleteHandler1(event:FlexEvent):void
+			{
+				//this.currentState="single";
+				Alert.show('f1');
+				//listFirst
+			}
+			
+			protected function list1_creationCompleteHandler2(event:FlexEvent):void
+			{
+				this.currentState="single";
+				Alert.show('f2');
+			}
+			protected function list1_creationCompleteHandler3(event:FlexEvent):void
+			{
+				
+				var tempDataProvider:ContentNavigator = map.infoWindowContent as ContentNavigator;
+				
+				var temDataLen:int = tempDataProvider.dataProvider.length;
+				//tempDataProvider.dataProvider.source[0].graphicsLayer
+				var layerName:String=null;
+				for(var ii:int=0;ii<temDataLen;ii++)
+				{
+					var tt:Graphic = tempDataProvider.dataProvider.getItemAt(ii) as Graphic;
+					layerName = tt.graphicsLayer.id;
+					break;
+				} 
+				if(layerName.indexOf("工")!=-1){
+					if(temDataLen>1){
+						this.currentState="onlyname";
+					}else{
+						this.currentState="single";
+					}
+				}else{
+					this.currentState="single";
+				}
+				isInit = true;
+			}
+			
+			protected function datagrid1_copyHandler(event:Event):void
+			{
+/* 				var tdg:DataGrid = event.currentTarget as DataGrid;
+				
+				System.setClipboard(tdg.dataProvider.getItemAt(tdg.selectedCell.rowIndex)['val']);
+ */			}
+			
+		]]>
+	</fx:Script>
+	<s:BorderContainer id="myBorderContainer" width="100" height="200" borderVisible="false"
+					   backgroundColor="#D01313">
+
+	</s:BorderContainer>
+	
+</s:Group>

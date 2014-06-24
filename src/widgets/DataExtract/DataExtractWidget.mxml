@@ -1,0 +1,917 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+///////////////////////////////////////////////////////////////////////////
+// Copyright (c) 2010-2011 Esri. All Rights Reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+///////////////////////////////////////////////////////////////////////////
+-->
+<viewer:BaseWidget xmlns:fx="http://ns.adobe.com/mxml/2009"
+                   xmlns:s="library://ns.adobe.com/flex/spark"
+                   xmlns:mx="library://ns.adobe.com/flex/mx"
+                   xmlns:viewer="com.esri.viewer.*"
+                   xmlns:esri="http://www.esri.com/2008/ags"
+                   xmlns:components="com.esri.viewer.components.*"
+                   initialize="basewidget_initializeHandler()"
+                   widgetConfigLoaded="basewidget_widgetConfigLoaded()">
+    <fx:Script>
+        <![CDATA[
+            import com.esri.ags.FeatureSet;
+            import com.esri.ags.Graphic;
+            import com.esri.ags.events.DrawEvent;
+            import com.esri.ags.events.GeometryServiceEvent;
+            import com.esri.ags.events.GeoprocessorEvent;
+            import com.esri.ags.geometry.Extent;
+            import com.esri.ags.geometry.Geometry;
+            import com.esri.ags.geometry.Polygon;
+            import com.esri.ags.layers.GraphicsLayer;
+            import com.esri.ags.symbols.Symbol;
+            import com.esri.ags.tasks.GeometryServiceSingleton;
+            import com.esri.ags.tasks.JSONTask;
+            import com.esri.ags.tasks.supportClasses.GPMessage;
+            import com.esri.ags.tasks.supportClasses.JobInfo;
+            import com.esri.ags.tools.DrawTool;
+            import com.esri.ags.tools.NavigationTool;
+            import com.esri.ags.utils.GeometryUtil;
+            import com.esri.ags.utils.GraphicUtil;
+            import com.esri.viewer.AppEvent;
+            import com.esri.viewer.utils.ErrorMessageUtil;
+
+            import mx.collections.ArrayCollection;
+            import mx.collections.ArrayList;
+            import mx.controls.Alert;
+            import mx.events.CloseEvent;
+            import mx.rpc.Fault;
+            import mx.rpc.events.FaultEvent;
+            import mx.utils.ObjectProxy;
+
+            private static const SENT_PARAM_NAME:String = "Sent";
+            private static const OUTPUT_ZIP_FILE_PARAM_NAME:String = "Output_Zip_File";
+
+            private var outputFileName:String;
+            private var graphicsLayer:GraphicsLayer;
+            private var graphicContextMenu:ContextMenu;
+            private var gpService:JSONTask;
+            private var selectedDrawingIcon:FocusableImage;
+            private var layerChoices:Array;
+
+            private var drawSymbol:Symbol;
+            [Bindable]
+            private var exposeLayers:Boolean = true; //later set to FALSE!!
+            [Bindable]
+            private var rasterFormatChoiceListVisible:Boolean;
+            [Bindable]
+            private var spatialReferenceChoiceListVisible:Boolean;
+            [Bindable]
+            private var emailInputVisible:Boolean;
+            [Bindable]
+            private var gpURL:String;
+            private var excludeLayers:Array = [];
+            [Bindable]
+            private var useCurrentExtentAsAIO:Boolean = false;
+            private var useProxy:Boolean;
+
+            //labels
+            [Bindable]
+            private var descLabel:String;
+            [Bindable]
+            private var step1Label:String;
+            [Bindable]
+            private var polygonLabel:String;
+            [Bindable]
+            private var freehandPolygonLabel:String;
+            [Bindable]
+            private var rectangleLabel:String;
+            [Bindable]
+            private var circleLabel:String;
+            [Bindable]
+            private var ellipseLabel:String;
+            [Bindable]
+            private var clearLabel:String;
+            [Bindable]
+            private var selectAllLabel:String;
+            [Bindable]
+            private var deselectAllLabel:String;
+            [Bindable]
+            private var dataCurrentExtentLabel:String;
+            [Bindable]
+            private var step2Label:String;
+            [Bindable]
+            private var step3Label:String;
+            [Bindable]
+            private var step4Label:String;
+            [Bindable]
+            private var step5Label:String;
+            [Bindable]
+            private var step6Label:String;
+            [Bindable]
+            private var extractButtonLabel:String;
+            private var step1ErrorLabel:String;
+            private var step2ErrorLabel:String;
+            private var emptyResultsLabel:String;
+            private var saveDataFileLabel:String;
+            private var successfulEmailLabel:String;
+            private var unsuccessfulEmailLabel:String;
+
+            private function basewidget_initializeHandler():void
+            {
+                if (isPartOfPanel)
+                {
+                    this.percentWidth = this.percentHeight = 100;
+                    wTemplate.percentWidth = wTemplate.percentHeight = 100;
+                }
+                else
+                {
+                    wTemplate.width = 320;
+                    wTemplate.height = 300;
+                }
+            }
+
+            private function basewidget_widgetConfigLoaded():void
+            {
+                graphicsLayer = new GraphicsLayer();
+                map.addLayer(graphicsLayer);
+
+                if (configXML)
+                {
+                    geometryService.url = GeometryServiceSingleton.instance.url;
+                    geometryService.token = GeometryServiceSingleton.instance.token;
+                    geometryService.proxyURL = GeometryServiceSingleton.instance.proxyURL;
+
+                    gpURL = configXML.dataextractionservice[0];
+                    useCurrentExtentAsAIO = (configXML.aioselectionmethod[0] == "extent");
+
+                    if (configXML.useproxy.length() > 0)
+                    {
+                        useProxy = configXML.useproxy == "true";
+                    }
+
+                    gpService = new JSONTask();
+                    gpService.url = gpURL;
+                    if (useProxy && configData.proxyUrl)
+                    {
+                        gpService.proxyURL = configData.proxyUrl;
+                        gp.proxyURL = configData.proxyUrl;
+                    }
+
+                    var urlVars:URLVariables = new URLVariables();
+                    urlVars.f = "json";
+
+                    //Call gpService to get service properties
+                    gpService.execute(urlVars, new mx.rpc.Responder(gpService_resultHandler, gpService_faultHandler));
+
+                    var excludeLayersXML:XMLList = configXML.excludelayer as XMLList;
+                    for (var i:int = 0; i < excludeLayersXML.length(); i++)
+                    {
+                        excludeLayers.push(excludeLayersXML[i].toString());
+                    }
+
+                    outputFileName = (configXML.outputfilename[0] || "extractedData") + ".zip";
+                    outputFileName = outputFileName.replace(/(\\|\/|:|\?|"|<|>|\|)/g, ""); //strip illegal characters
+
+                    graphicsLayer.name = configXML.layername || widgetTitle;
+
+                    descLabel = configXML.labels.desclabel[0] || getDefaultString("descLabel");
+                    step1Label = configXML.labels.step1label[0] || getDefaultString("step1Label");
+                    polygonLabel = configXML.labels.polygonlabel[0] || getDefaultString("drawPolygonLabel");
+                    freehandPolygonLabel = configXML.labels.freehandpolygonlabel[0] || getDefaultString("drawFreehandPolygonLabel");
+                    rectangleLabel = configXML.labels.rectanglelabel[0] || getDefaultString("drawRectangleLabel");
+                    circleLabel = configXML.labels.circlelabel[0] || getDefaultString("drawCircleLabel");
+                    ellipseLabel = configXML.labels.ellipselabel[0] || getDefaultString("drawEllipseLabel");
+                    clearLabel = configXML.labels.clearlabel[0] || getDefaultString("clearLabel");
+                    dataCurrentExtentLabel = configXML.labels.datacurrentextentlabel[0] || getDefaultString("dataCurrentExtentLabel");
+                    step2Label = configXML.labels.step2label[0] || getDefaultString("step2Label");
+                    step3Label = configXML.labels.step3label[0] || getDefaultString("step3Label");
+                    step4Label = configXML.labels.step4label[0] || getDefaultString("step4Label");
+                    step5Label = configXML.labels.step5label[0] || getDefaultString("step5Label");
+                    step6Label = configXML.labels.step6label[0] || getDefaultString("step6Label");
+                    extractButtonLabel = configXML.labels.extractbuttonlabel[0] || getDefaultString("extractButtonLabel");
+                    step1ErrorLabel = configXML.labels.step1errorlabel[0] || getDefaultString("step1ErrorLabel");
+                    step2ErrorLabel = configXML.labels.step2errorlabel[0] || getDefaultString("step2ErrorLabel");
+                    emptyResultsLabel = configXML.labels.emptyresultslabel[0] || getDefaultString("emptyResultsLabel");
+                    saveDataFileLabel = configXML.labels.savedatafilelabel[0] || getDefaultString("saveDataFileLabel");
+                    selectAllLabel = configXML.labels.selectalllabel[0] || getDefaultString("selectAllLabel");
+                    deselectAllLabel = configXML.labels.deselectalllabel[0] || getDefaultString("deselectAllLabel");
+                    successfulEmailLabel = configXML.labels.successfulemaillabel[0] || getDefaultString("successfulEmailLabel");
+                    unsuccessfulEmailLabel = configXML.labels.unsuccessfulemaillabel[0] || getDefaultString("unsuccessfulEmailLabel");
+
+                    initGraphicContextMenu();
+                }
+                AppEvent.addListener(AppEvent.DATA_PUBLISH, viewerContainer_dataPublishHandler);
+            }
+
+            private function initGraphicContextMenu():void
+            {
+                graphicContextMenu = new ContextMenu();
+                graphicContextMenu.hideBuiltInItems();
+                var menuItem:ContextMenuItem = new ContextMenuItem(clearLabel);
+                menuItem.addEventListener(ContextMenuEvent.MENU_ITEM_SELECT, menuItem_contextMenuDeleteHandler);
+                graphicContextMenu.customItems.push(menuItem);
+            }
+
+            protected function menuItem_contextMenuDeleteHandler(event:ContextMenuEvent):void
+            {
+                var graphic:Graphic = event.contextMenuOwner as Graphic;
+                var graphicsLayer:GraphicsLayer = graphic.graphicsLayer;
+                graphicsLayer.remove(graphic);
+            }
+
+            private function callGPService():void
+            {
+                var geometries:Array = getInputGeometries();
+                if (!geometries)
+                {
+                    showError(step1ErrorLabel);
+                    return;
+                }
+
+                var layersToClip:Array = getLayersToClip();
+                if (exposeLayers && layersToClip.length == 0)
+                {
+                    showError(step2ErrorLabel);
+                    return;
+                }
+
+                if (needToSimplifyPolygons(geometries))
+                {
+                    geometryService.simplify(geometries);
+                }
+                else
+                {
+                    createGPParamsAndExtract(geometries);
+                }
+            }
+
+            private function geometryService_simplifyHandler(event:GeometryServiceEvent):void
+            {
+                createGPParamsAndExtract(event.result as Array);
+            }
+
+            private function geometryService_faultHandler(event:FaultEvent):void
+            {
+                showError(event.fault.toString());
+            }
+
+            private function createGPParamsAndExtract(areaOfInterestGeometries:Array):void
+            {
+                var areaOfInterest:FeatureSet = createClipFeatureSet(areaOfInterestGeometries);
+                var featureFormat:String = formatDDL.selectedItem.data;
+                var layersToClip:Array = exposeLayers ? getLayersToClip() : null;
+                var rasterFormat:String = rasterFormatChoiceListVisible ? rasterFormatDDL.selectedItem.data : null;
+                var spatialReference:String = spatialReferenceChoiceListVisible ? spatialReferenceDDL.selectedItem.data : null;
+                var recipientEmail:String = emailInputVisible ? emailInput.text : null;
+
+                var params:Object = createGPParams(areaOfInterest, featureFormat,
+                                                   layersToClip, rasterFormat,
+                                                   spatialReference, recipientEmail);
+
+                setMapNavigation(null, null);
+                swfMessage.visible = true;
+
+                gp.processSpatialReference = map.spatialReference;
+                gp.outSpatialReference = map.spatialReference;
+                gp.submitJob(params);
+            }
+
+            private function getInputGeometries():Array
+            {
+                var geometries:Array;
+
+                if (useCurrentExtentAsAIO)
+                {
+                    geometries = [ map.extent.toPolygon() ];
+                }
+                else if (graphicsLayer.numGraphics > 0)
+                {
+                    var graphics:Array = (graphicsLayer.graphicProvider as ArrayCollection).toArray();
+                    geometries = GraphicUtil.getGeometries(graphics);
+                }
+
+                return geometries;
+            }
+
+            private function needToSimplifyPolygons(geometries:Array):Boolean
+            {
+                var hasSelfIntersectingPolygons:Boolean = false;
+
+                for each (var geometry:Geometry in geometries)
+                {
+                    if (geometry.type == Geometry.POLYGON)
+                    {
+                        if (GeometryUtil.polygonSelfIntersecting(geometry as Polygon))
+                        {
+                            hasSelfIntersectingPolygons = true;
+                            break;
+                        }
+                    }
+                }
+
+                return hasSelfIntersectingPolygons;
+            }
+
+            private function createGPParams(areaOfInterest:FeatureSet, featureFormat:String, layersToClip:Array = null, rasterFormat:String = null, spatialReference:String = null, recipientEmail:String = null):Object
+            {
+                var gpParams:Object = {};
+
+                gpParams["Area_of_Interest"] = areaOfInterest;
+                gpParams["Feature_Format"] = featureFormat;
+
+                if (layersToClip && layersToClip.length > 0)
+                {
+                    gpParams["Layers_to_Clip"] = layersToClip;
+                }
+
+                if (rasterFormat)
+                {
+                    gpParams["Raster_Format"] = rasterFormat;
+                }
+
+                if (spatialReference)
+                {
+                    gpParams["Spatial_Reference"] = spatialReference;
+                }
+
+                if (recipientEmail)
+                {
+                    gpParams["To"] = recipientEmail;
+                }
+
+                return gpParams;
+            }
+
+            private function createClipFeatureSet(geometries:Array):FeatureSet
+            {
+                var clipFS:FeatureSet;
+                var features:Array = [];
+
+                for each (var geometry:Geometry in geometries)
+                {
+                    features.push({ geometry: geometry });
+                }
+
+                clipFS = new FeatureSet(features);
+                clipFS.spatialReference = map.spatialReference;
+
+                return clipFS;
+            }
+
+            //
+            // Draw functions
+            //
+            private function activateDrawTool(event:MouseEvent):void
+            {
+                addSharedData("Deactivate_DrawTool", null); // to be able to deactivate drawTool on other widgets
+
+                // apply glow
+                selectedDrawingIcon = FocusableImage(event.currentTarget);
+                clearSelectionFilter();
+                selectedDrawingIcon.filters = [ glowFilter ];
+
+                var status:String;
+                var value:String = selectedDrawingIcon.name;
+                switch (value)
+                {
+                    case DrawTool.POLYGON:
+                    {
+                        status = polygonLabel;
+                        break;
+                    }
+                    case DrawTool.FREEHAND_POLYGON:
+                    {
+                        status = freehandPolygonLabel;
+                        break;
+                    }
+                    case DrawTool.EXTENT:
+                    {
+                        status = rectangleLabel;
+                        break;
+                    }
+                    case DrawTool.CIRCLE:
+                    {
+                        status = circleLabel;
+                        break;
+                    }
+                    case DrawTool.ELLIPSE:
+                    {
+                        status = ellipseLabel;
+                        break;
+                    }
+                }
+                drawSymbol = new SimpleFillSymbol(SimpleFillSymbol.STYLE_SOLID, 0x3FAFDC, 0.5, new SimpleLineSymbol(SimpleLineSymbol.STYLE_SOLID, 0x3FAFDC, 1, 2));
+                setMapAction(value, status, drawSymbol, map_drawEndHandler);
+            }
+
+            private function clearSelectionFilter():void
+            {
+                for (var i:int = 0; i < aioBox.numChildren; i++)
+                {
+                    if (aioBox.getChildAt(i).filters && aioBox.getChildAt(i).filters.length > 0)
+                    {
+                        if (!(selectedDrawingIcon && aioBox.getChildAt(i) === selectedDrawingIcon))
+                        {
+                            aioBox.getChildAt(i).filters = [];
+                        }
+                    }
+                }
+            }
+
+            private function onTurnOnNav():void
+            {
+                setMapNavigation(NavigationTool.PAN, "Pan Map");
+            }
+
+            private function clear():void
+            {
+                onTurnOnNav();
+                if (selectedDrawingIcon)
+                {
+                    selectedDrawingIcon.filters = [];
+                    selectedDrawingIcon = null;
+                }
+                graphicsLayer.clear();
+            }
+
+            private function viewerContainer_dataPublishHandler(event:AppEvent):void
+            {
+                var data:Object = event.data;
+
+                if (data.key == "Deactivate_DrawTool")
+                {
+                    setMapAction(null, null, null, null);
+                    if (selectedDrawingIcon)
+                    {
+                        selectedDrawingIcon.filters = [];
+                        selectedDrawingIcon = null;
+                    }
+                }
+            }
+
+            private function wTemplate_closedHandler(event:Event):void
+            {
+                graphicsLayer.visible = false;
+
+                setMapAction(null, null, null, null); // deactivate drawTool
+                if (selectedDrawingIcon)
+                {
+                    selectedDrawingIcon.filters = [];
+                    selectedDrawingIcon = null;
+                }
+            }
+
+            private function wTemplate_openHandler(event:Event):void
+            {
+                if (graphicsLayer)
+                {
+                    graphicsLayer.visible = true;
+                }
+            }
+
+            private function wTemplate_minimizedHandler(event:Event):void
+            {
+                graphicsLayer.visible = false;
+            }
+
+            private function icon_rollOverHandler(event:MouseEvent):void
+            {
+                clearSelectionFilter();
+                event.target.filters = [ glowFilter ];
+            }
+
+            private function icon_rollOutHandler(event:MouseEvent):void
+            {
+                clearSelectionFilter();
+            }
+
+            private function map_drawEndHandler(event:DrawEvent):void
+            {
+                selectedDrawingIcon = null;
+                clearSelectionFilter();
+
+                onTurnOnNav();
+
+                var graphic:Graphic = event.graphic;
+                graphic.contextMenu = graphicContextMenu;
+
+                const extent:Extent = graphic.geometry as Extent;
+                if (extent)
+                {
+                    graphic.geometry = extent.toPolygon();
+                }
+                graphic.symbol = drawSymbol;
+
+                graphicsLayer.add(graphic);
+            }
+
+            private function gp_jobCompleteHandler(event:GeoprocessorEvent):void
+            {
+                swfMessage.visible = false;
+                if (event.jobInfo.jobStatus == JobInfo.STATUS_SUCCEEDED)
+                {
+                    var paramName:String = emailInputVisible ? SENT_PARAM_NAME : OUTPUT_ZIP_FILE_PARAM_NAME;
+                    gp.getResultData(gp.submitJobLastResult.jobId, paramName);
+                }
+                else
+                {
+                    var msg:String = getDefaultString("problemLabel") + "\n\n\n" + event.jobInfo.jobStatus;
+                    if (event.jobInfo.messages)
+                    {
+                        msg += "\n\n\n" + GPMessage(event.jobInfo.messages[event.jobInfo.messages.length - 1]).description;
+                    }
+                    showError(msg);
+                }
+            }
+
+            private function gp_getResultDataCompleteHandler(event:GeoprocessorEvent):void
+            {
+                if (event.parameterValue)
+                {
+                    if (event.parameterValue.paramName == SENT_PARAM_NAME)
+                    {
+                        var successfullySent:Boolean = event.parameterValue.value as Boolean;
+                        promptEmailStatus(successfullySent);
+                    }
+                    else
+                    {
+                        var dataURL:String = event.parameterValue.value.url as String;
+                        prepareResultDownload(dataURL);
+                    }
+                }
+                else
+                {
+                    showError(emptyResultsLabel);
+                }
+            }
+
+            private function promptEmailStatus(successfullySent:Boolean):void
+            {
+                var emailSentMessage:String = successfullySent ? successfulEmailLabel : unsuccessfulEmailLabel;
+                Alert.show(emailSentMessage, wTemplate.widgetTitle, Alert.OK);
+            }
+
+            private function prepareResultDownload(dataUrl:String):void
+            {
+                if (!dataUrl)
+                {
+                    showError(emptyResultsLabel);
+                    return;
+                }
+
+                Alert.show(saveDataFileLabel, wTemplate.widgetTitle,
+                           Alert.YES | Alert.NO, null, alert_closeHandler);
+
+                function alert_closeHandler(event:CloseEvent):void
+                {
+                    if (event.detail == Alert.YES)
+                    {
+                        downloadFile(dataUrl);
+                    }
+                }
+            }
+
+            private function downloadFile(url:String):void
+            {
+                var downloadURL:URLRequest = new URLRequest(url);
+                var file:FileReference = new FileReference();
+                // TODO: can we be smarter with the name of the zip file? For example, for single layers, using a modified layer name?
+                file.download(downloadURL, outputFileName);
+            }
+
+            private function gp_faultHandler(event:FaultEvent):void
+            {
+                swfMessage.visible = false;
+                var msg:String = getDefaultString("problemLabel") + "\n\n\n" + event.fault.faultString;
+                showError(msg);
+            }
+
+            private function gpService_resultHandler(serviceProperties:Object):void
+            {
+                var params:Array = serviceProperties.parameters;
+                rasterFormatChoiceListVisible = false;
+                spatialReferenceChoiceListVisible = false;
+                for (var i:int = 0; i < params.length; i++)
+                {
+                    if (params[i].name == "Layers_to_Clip")
+                    {
+                        exposeLayers = true;
+                        layerChoices = [];
+                        for each (var layerName:String in params[i].choiceList)
+                        {
+                            if (excludeLayers.indexOf(layerName) == -1)
+                            {
+                                layerChoices.push(new ObjectProxy({ label: layerName, selected: false }));
+                            }
+                        }
+                        checkBoxDG.dataProvider = new ArrayList(layerChoices);
+                    }
+
+                    if (params[i].name == "Feature_Format")
+                    {
+                        var formats:Array = [];
+                        for each (var format:String in params[i].choiceList)
+                        {
+                            const fileLabel:String = format.substring(0, format.indexOf("-") - 1);
+                            const fileExtension:String = format.substring(format.lastIndexOf("."), format.length);
+                            formats.push({ data: format, label: fileLabel + " (" + fileExtension + ")" });
+                        }
+                        formatDDL.dataProvider = new ArrayList(formats);
+                    }
+
+                    if (params[i].name == "Raster_Format")
+                    {
+                        rasterFormatChoiceListVisible = true;
+                        var rasterFormats:Array = [];
+                        for each (var rasterFormat:String in params[i].choiceList)
+                        {
+                            const fileLabel1:String = rasterFormat.substring(0, rasterFormat.indexOf("-") - 1);
+                            const fileExtension1:String = rasterFormat.substring(rasterFormat.lastIndexOf("."), rasterFormat.length);
+                            rasterFormats.push({ data: rasterFormat, label: fileLabel1 + " (" + fileExtension1 + ")" });
+                        }
+                        rasterFormatDDL.dataProvider = new ArrayList(rasterFormats);
+                    }
+
+                    if (params[i].name == "Spatial_Reference")
+                    {
+                        spatialReferenceChoiceListVisible = true;
+                        var spatialReferences:Array = [];
+                        for each (var spatialReferenceString:String in params[i].choiceList)
+                        {
+                            spatialReferences.push({ data: spatialReferenceString, label: spatialReferenceString });
+                        }
+                        spatialReferenceDDL.dataProvider = new ArrayList(spatialReferences);
+                    }
+
+                    if (params[i].name == "To")
+                    {
+                        emailInputVisible = true;
+                        emailInput.text = params[i].defaultValue;
+                    }
+                }
+            }
+
+            private function gpService_faultHandler(fault:Fault):void
+            {
+                var msg:String = getDefaultString("gpServiceConnectionError",
+                                                  gp.url,
+                                                  ErrorMessageUtil.getKnownErrorCauseMessage(fault),
+                                                  ErrorMessageUtil.makeHTMLSafe(fault.toString()));
+                showError(msg);
+                widgetVBox.enabled = false;
+            }
+
+            private function toggleLayerSelection(value:Boolean):void
+            {
+                for each (var choice:Object in layerChoices)
+                {
+                    choice.selected = value;
+                }
+            }
+
+            private function getLayersToClip():Array
+            {
+                var layersToClip:Array = [];
+                for each (var choice:Object in layerChoices)
+                {
+                    if (choice.selected)
+                    {
+                        layersToClip.push(choice.label);
+                    }
+                }
+                return layersToClip;
+            }
+        ]]>
+    </fx:Script>
+
+    <fx:Declarations>
+        <esri:SimpleFillSymbol id="sfs"
+                               alpha="0.8"
+                               color="#FFFFFF">
+            <esri:SimpleLineSymbol width="2"
+                                   color="#00FF00"
+                                   style="solid"/>
+        </esri:SimpleFillSymbol>
+
+        <esri:GeometryService id="geometryService"
+                              fault="geometryService_faultHandler(event)"
+                              simplifyComplete="geometryService_simplifyHandler(event)"/>
+
+        <esri:Geoprocessor id="gp"
+                           concurrency="last"
+                           fault="gp_faultHandler(event)"
+                           getResultDataComplete="gp_getResultDataCompleteHandler(event)"
+                           jobComplete="gp_jobCompleteHandler(event)"
+                           url="{gpURL}"/>
+
+        <s:GlowFilter id="glowFilter"
+                      alpha="1"
+                      color="{getStyle('focusColor')}"
+                      inner="true"
+                      strength="2"/>
+    </fx:Declarations>
+
+    <viewer:WidgetTemplate id="wTemplate"
+                           closed="wTemplate_closedHandler(event)"
+                           minimized="wTemplate_minimizedHandler(event)"
+                           open="wTemplate_openHandler(event)">
+        <s:Scroller width="100%" height="100%"
+                    horizontalScrollPolicy="off">
+            <s:VGroup id="widgetVBox"
+                      width="100%" height="100%"
+                      gap="4"
+                      verticalAlign="middle">
+                <s:Label width="100%" text="{descLabel}"/>
+
+                <s:Spacer/>
+
+                <s:HGroup id="aioBox"
+                          width="100%" height="40"
+                          gap="0"
+                          horizontalAlign="left"
+                          includeInLayout="{!useCurrentExtentAsAIO}"
+                          visible="{!useCurrentExtentAsAIO}">
+                    <s:VGroup height="100%">
+                        <s:Label text="{step1Label}"/>
+
+                        <s:Spacer height="100%"/>
+
+                        <s:HGroup width="100%" height="100%"
+                                  horizontalAlign="right"
+                                  paddingBottom="3">
+                            <s:Label buttonMode="true"
+                                     click="clear()"
+                                     text="{clearLabel}"
+                                     textDecoration="underline"/>
+                        </s:HGroup>
+                    </s:VGroup>
+
+                    <components:FocusableImage name="{DrawTool.EXTENT}"
+                                               width="40" height="40"
+                                               buttonMode="true"
+                                               click="activateDrawTool(event)"
+                                               rollOut="icon_rollOutHandler(event)"
+                                               rollOver="icon_rollOverHandler(event)"
+                                               source="assets/images/i_draw_rect.png"
+                                               toolTip="{rectangleLabel}"
+                                               useHandCursor="true"/>
+
+                    <components:FocusableImage name="{DrawTool.CIRCLE}"
+                                               width="40" height="40"
+                                               buttonMode="true"
+                                               click="activateDrawTool(event)"
+                                               rollOut="icon_rollOutHandler(event)"
+                                               rollOver="icon_rollOverHandler(event)"
+                                               source="assets/images/i_draw_circle.png"
+                                               toolTip="{circleLabel}"
+                                               useHandCursor="true"/>
+
+                    <components:FocusableImage name="{DrawTool.ELLIPSE}"
+                                               width="40" height="40"
+                                               buttonMode="true"
+                                               click="activateDrawTool(event)"
+                                               rollOut="icon_rollOutHandler(event)"
+                                               rollOver="icon_rollOverHandler(event)"
+                                               source="assets/images/i_draw_ellipse.png"
+                                               toolTip="{ellipseLabel}"
+                                               useHandCursor="true"/>
+
+                    <components:FocusableImage name="{DrawTool.POLYGON}"
+                                               width="40" height="40"
+                                               buttonMode="true"
+                                               click="activateDrawTool(event)"
+                                               rollOut="icon_rollOutHandler(event)"
+                                               rollOver="icon_rollOverHandler(event)"
+                                               source="assets/images/i_draw_poly.png"
+                                               toolTip="{polygonLabel}"
+                                               useHandCursor="true"/>
+
+                    <components:FocusableImage name="{DrawTool.FREEHAND_POLYGON}"
+                                               width="40" height="40"
+                                               buttonMode="true"
+                                               click="activateDrawTool(event)"
+                                               rollOut="icon_rollOutHandler(event)"
+                                               rollOver="icon_rollOverHandler(event)"
+                                               source="assets/images/i_draw_freepoly.png"
+                                               toolTip="{freehandPolygonLabel}"
+                                               useHandCursor="true"/>
+                </s:HGroup>
+
+                <s:Label width="100%"
+                         includeInLayout="{useCurrentExtentAsAIO}"
+                         text="{dataCurrentExtentLabel}"
+                         visible="{useCurrentExtentAsAIO}"/>
+
+                <s:Line width="100%">
+                    <s:stroke>
+                        <s:SolidColorStroke color="0xEEEEEE" weight="2"/>
+                    </s:stroke>
+                </s:Line>
+
+                <s:VGroup width="100%" height="100%"
+                          gap="4"
+                          includeInLayout="{exposeLayers}"
+                          minHeight="80"
+                          visible="{exposeLayers}">
+                    <s:Label paddingTop="4" text="{step2Label}"/>
+
+                    <s:Scroller width="100%" height="100%">
+                        <s:DataGroup id="checkBoxDG">
+                            <s:layout>
+                                <s:VerticalLayout gap="2"
+                                                  horizontalAlign="left"
+                                                  useVirtualLayout="true"/>
+                            </s:layout>
+
+                            <s:itemRenderer>
+                                <fx:Component>
+                                    <s:DataRenderer>
+                                        <s:CheckBox label="{data.label}" selected="@{data.selected}"/>
+                                    </s:DataRenderer>
+                                </fx:Component>
+                            </s:itemRenderer>
+                        </s:DataGroup>
+                    </s:Scroller>
+
+                    <s:HGroup id="layerToggleGroup" paddingTop="4">
+                        <s:Label buttonMode="true"
+                                 click="toggleLayerSelection(true)"
+                                 text="{selectAllLabel}"
+                                 textDecoration="underline"/>
+
+                        <s:Label buttonMode="true"
+                                 click="toggleLayerSelection(false)"
+                                 text="{deselectAllLabel}"
+                                 textDecoration="underline"/>
+                    </s:HGroup>
+                </s:VGroup>
+
+                <s:Line width="100%"
+                        includeInLayout="{exposeLayers}"
+                        visible="{exposeLayers}">
+                    <s:stroke>
+                        <s:SolidColorStroke color="0xEEEEEE" weight="2"/>
+                    </s:stroke>
+                </s:Line>
+
+                <s:VGroup width="100%" height="100%">
+                    <s:Label paddingTop="4" text="{step3Label}"/>
+
+                    <s:DropDownList id="formatDDL"
+                                    width="100%"
+                                    requireSelection="true"/>
+
+                    <s:Label includeInLayout="{rasterFormatChoiceListVisible}"
+                             paddingTop="4"
+                             text="{step4Label}"
+                             visible="{rasterFormatChoiceListVisible}"/>
+
+                    <s:DropDownList id="rasterFormatDDL"
+                                    width="100%"
+                                    includeInLayout="{rasterFormatChoiceListVisible}"
+                                    requireSelection="true"
+                                    visible="{rasterFormatChoiceListVisible}"/>
+
+                    <s:Label includeInLayout="{spatialReferenceChoiceListVisible}"
+                             paddingTop="4"
+                             text="{step5Label}"
+                             visible="{spatialReferenceChoiceListVisible}"/>
+
+                    <s:DropDownList id="spatialReferenceDDL"
+                                    width="100%"
+                                    includeInLayout="{spatialReferenceChoiceListVisible}"
+                                    requireSelection="true"
+                                    visible="{spatialReferenceChoiceListVisible}"/>
+
+                    <s:Label includeInLayout="{emailInputVisible}"
+                             paddingTop="4"
+                             text="{step6Label}"
+                             visible="{emailInputVisible}"/>
+
+                    <s:TextInput id="emailInput"
+                                 width="100%"
+                                 includeInLayout="{emailInputVisible}"
+                                 visible="{emailInputVisible}"/>
+
+                    <s:HGroup width="100%" verticalAlign="middle">
+                        <s:Button id="extract"
+                                  click="callGPService()"
+                                  horizontalCenter="0"
+                                  label="{extractButtonLabel}"/>
+
+                        <mx:Image id="swfMessage"
+                                  source="assets/images/loader.swf"
+                                  visible="false"/>
+                    </s:HGroup>
+                </s:VGroup>
+            </s:VGroup>
+        </s:Scroller>
+    </viewer:WidgetTemplate>
+</viewer:BaseWidget>

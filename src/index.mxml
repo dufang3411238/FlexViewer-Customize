@@ -1,0 +1,159 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Application  xmlns:fx="http://ns.adobe.com/mxml/2009"
+				xmlns:s="library://ns.adobe.com/flex/spark"
+				xmlns:mx="library://ns.adobe.com/flex/mx"
+				minWidth="955" minHeight="600" pageTitle="南山街道办安全管理地理信息系统"
+				creationComplete="application1_creationCompleteHandler(event)">
+	<fx:Style source="defaults.css"/>
+	<fx:Declarations>
+		<s:HTTPService id="login" method="POST" result="resultHandler(event)"
+					   url="http://113.108.119.116:8081/phpsrc/tindex.php" useProxy="false"> 
+			<mx:request xmlns=""> 
+				<usertype>{curType}</usertype>
+				<username>{username.text}</username> 
+				<userpwd>{userpwd.text}</userpwd> 
+			</mx:request>         
+		</s:HTTPService> 
+	</fx:Declarations>
+	<fx:Script>
+		<![CDATA[
+			import com.esri.viewer.components.CustomEditor;
+			import mx.collections.ArrayCollection;
+			import mx.controls.Alert;
+			import mx.events.FlexEvent;
+			import mx.rpc.events.ResultEvent;
+			
+			import spark.events.IndexChangeEvent;
+			
+			private var com_esri_viewer_components_CustomEditor_obj:com.esri.viewer.components.CustomEditor;
+			
+			[Bindable] 
+			public var types:ArrayCollection = new ArrayCollection( 
+				[ {label:"管理员", data:1},  
+					{label:"普通用户", data:2}]); 
+			[Bindable] 
+			public var curType:String="2";
+			
+			[Bindable]
+			private var footH:uint=0;
+			[Bindable]
+			private var myHeight:int;
+			private function goLogin():void{
+				//Alert.show(curType);
+				login.send();	
+			}
+			private function resultHandler(event:ResultEvent):void{
+				var s:String = event.result.toString();
+				if(s == "success"){
+					var request:URLRequest=new URLRequest("tindex.html?type="+curType+"&u="+username.text);  
+					navigateToURL(request,"_self"); 
+				}else{
+					Alert.show(s);
+				}
+			}
+			
+			protected function usertype_changeHandler(event:IndexChangeEvent):void
+			{
+				//curType = ComboBox(event.target).selectedItem.data;
+			}
+			
+			
+			protected function image1_clickHandler(event:MouseEvent):void
+			{
+				//this.currentState="PublicLogin";
+				curType = "2";
+				userSelected.setStyle("chromeColor",0xa8cef6);
+				
+				adminSelected.setStyle("chromeColor",0xf4f4f4);
+				
+			}
+			
+			protected function image2_clickHandler(event:MouseEvent):void
+			{
+				//this.currentState="AdministratorLogin";
+				curType = "1";
+				adminSelected.setStyle("chromeColor",0xa8cef6);
+				
+				userSelected.setStyle("chromeColor",0xf4f4f4);
+				
+			}
+			
+			protected function application1_creationCompleteHandler(event:FlexEvent):void
+			{
+				// TODO Auto-generated method stub
+				//myHeight = 
+			}
+			
+		]]>
+	</fx:Script>
+	
+	<fx:Style>
+		@namespace s "library://ns.adobe.com/flex/spark";
+		@namespace mx "library://ns.adobe.com/flex/mx";
+		s|Label{      
+			fontFamily:"宋体";
+			fontSize: 14;   
+			fontWeight:bold;
+		}
+	</fx:Style>
+	<s:layout>
+		<s:VerticalLayout gap="0"/>
+	</s:layout>
+	<s:BorderContainer width="100%" height="100%" borderVisible="false" backgroundColor="#19aaff" >
+		<s:BitmapImage width="100%" height="750" fillMode="repeat" top="0"
+					   source="assets/images/nBGBar.png">
+		</s:BitmapImage>
+		<s:Image width="1454" height="750" horizontalCenter="0" top="0"
+				 source="assets/images/nBG2.png"/>
+		<s:BorderContainer bottom="{this.height&gt;750?0:750-this.height}" width="{this.width}" height="700"
+						   backgroundAlpha="0" borderVisible="false">
+			
+			
+			<s:Image bottom="100" width="425" height="445" horizontalCenter="-200"
+					 source="assets/images/house.png"/>
+			
+			<s:BitmapImage width="100%" height="102" fillMode="repeat" bottom="0"
+						   source="@Embed('assets/images/btmbk.png')">
+			</s:BitmapImage>
+			<!--登陆框-->
+			<s:BorderContainer bottom="159" width="370" height="300" backgroundAlpha="0"
+							   borderVisible="false" horizontalCenter="220">
+				<s:layout>
+					<s:VerticalLayout gap="0"/>
+				</s:layout>
+				<s:BorderContainer width="370" height="40" borderVisible="false" backgroundAlpha="0">
+					<s:layout>
+						<s:VerticalLayout/>
+					</s:layout>
+					<s:HGroup gap="10">
+						<s:Button id="userSelected" width="98" height="40" label="用户"  skinClass="com.esri.viewer.skins.flatButton" buttonMode="true"
+								  click="image1_clickHandler(event)" useHandCursor="true" chromeColor="#A8CEF6" color="#006499" />
+						<s:Button id="adminSelected" width="98" height="40" label="管理员" skinClass="com.esri.viewer.skins.flatButton" buttonMode="true"
+								  click="image2_clickHandler(event)" useHandCursor="true" chromeColor="#f4f4f4" color="#006499"/>
+					</s:HGroup>
+					
+				</s:BorderContainer>
+				<s:BorderContainer width="370" height="250" backgroundColor="#a8cef6"
+								   borderColor="#A8CEF6" borderVisible="true" 
+								   dropShadowVisible="false" horizontalCenter="0" skinClass="com.esri.viewer.skins.roundPanel">
+					<s:TextInput id="username" x="101" y="48" width="240" height="35"
+								 borderColor="#0c87c7" enabled="true" fontSize="16" skinClass="com.esri.viewer.skins.CustomInput"/>
+					<s:TextInput id="userpwd" x="102" y="127" width="240" height="35" skinClass="com.esri.viewer.skins.CustomInput"
+								 borderColor="#0c87c7" displayAsPassword="true" fontSize="16" enter="goLogin()"/>
+					<s:Image x="32" y="184" buttonMode="true" click="goLogin()" horizontalCenter="0"
+							 source="assets/images/Login.png" useHandCursor="true"/>
+					<s:Label x="34" y="59" color="#006499" text="用户名："/>
+					<s:Label x="36" y="139" color="#006499" text="密  码："/>
+				</s:BorderContainer>
+			</s:BorderContainer>
+			<s:Image top="32" width="398" height="127" horizontalCenter="10"
+					 source="assets/images/title.png"/>
+			<s:Label bottom="110" color="#FFFFFF" fontSize="12" horizontalCenter="70" text="主办单位："/>
+			<s:Label bottom="110" color="#FFFFFF" fontSize="12" fontWeight="normal" horizontalCenter="141"
+					 text="南山街道办事处"/>
+			<s:Label bottom="109" color="#FFFFFF" fontSize="12" horizontalCenter="243" text="制作单位："/>
+			<s:Label bottom="109" color="#FFFFFF" fontSize="12" fontWeight="normal" horizontalCenter="337"
+					 text="深圳市易图资讯有限公司"/>
+		</s:BorderContainer>
+	</s:BorderContainer>
+</s:Application>
